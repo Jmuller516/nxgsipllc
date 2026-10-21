@@ -10,6 +10,7 @@ const { createService, BookingError } = require('./bookings');
 const { createNotifier } = require('./notifications');
 const { createQuickBooks } = require('./quickbooks');
 const priceSettings = require('./price-settings');
+const { createAssistant } = require('./assistant');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
@@ -21,6 +22,7 @@ function createApp(db, opts = {}) {
   const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, baseUrl: opts.baseUrl });
   const qbo = createQuickBooks(db, { clock: opts.clock, fetch: opts.qboFetch });
   hooks.onPayment.push(notifier.onPayment, qbo.onPayment);
+  const assistant = createAssistant(db, svc, { clock: opts.clock, runner: opts.assistantRunner, fetch: opts.assistantFetch });
   hooks.onLead.push(notifier.onLead);
 
   // Send queued emails / QuickBooks entries soon after something happens, without slowing the request.
@@ -56,6 +58,15 @@ function createApp(db, opts = {}) {
     maxDaysAhead: config.maxDaysAhead,
     partyDays: Object.entries(config.partyHours).filter(([, h]) => h).map(([d]) => Number(d)),
     stripe: stripe.enabled(),
+    assistant: { enabled: assistant.enabled(), name: assistant.name() },
+  }));
+
+  // Chat assistant. Works from our own pages and, via CORS, from the nxgs.net site.
+  route('POST', '/api/chat', ({ body, req, baseUrl }) => assistant.chat({
+    sessionId: body.sessionId,
+    message: body.message,
+    ip: String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress,
+    checkout: (b) => startCheckout(b, b.deposit_cents, b.quote.payInFull ? 'full' : 'deposit', baseUrl),
   }));
 
   route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || '')));
@@ -117,6 +128,8 @@ function createApp(db, opts = {}) {
     return { customerPage: customerUrl(b, baseUrl) };
   }, { admin: true });
   route('GET', '/api/admin/leads', () => svc.listLeads(), { admin: true });
+  route('GET', '/api/admin/chats', () => ({ enabled: assistant.enabled(), chats: assistant.list() }), { admin: true });
+  route('GET', '/api/admin/chats/:id', ({ params }) => assistant.transcript(params.id) || (() => { throw notFound(); })(), { admin: true });
 
   // Staff calendar & closures
   route('GET', '/api/admin/calendar', ({ query }) => svc.adminMonth(String(query.month || '')), { admin: true });
@@ -249,9 +262,23 @@ function createApp(db, opts = {}) {
     try {
       if (opts.expireHolds !== false) svc.expireHolds();
 
+      if (pathname === '/api/chat') {
+        const allowed = (process.env.EMBED_ORIGINS || '*').split(/[\s,]+/).filter(Boolean);
+        const origin = req.headers.origin;
+        if (origin && (allowed.includes('*') || allowed.includes(origin))) {
+          res.setHeader('Access-Control-Allow-Origin', allowed.includes('*') ? '*' : origin);
+          res.setHeader('Vary', 'Origin');
+        }
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204, { 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
+          return res.end();
+        }
+      }
+
       // Pages
       if (req.method === 'GET' && (pathname === '/' || pathname === '/book')) return sendFile(res, 'book.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/calendar') return sendFile(res, 'calendar.html', { embeddable: true });
+      if (req.method === 'GET' && pathname === '/chat') return sendFile(res, 'chat.html', { embeddable: true });
       const feed = /^\/feeds\/([^/]+)\/parties\.ics$/.exec(pathname);
       if (req.method === 'GET' && feed) {
         if (!process.env.ADMIN_PASSWORD || !safeEqual(feed[1], feedToken())) return send(res, { error: 'Not found' }, 404);
@@ -359,7 +386,7 @@ function createApp(db, opts = {}) {
     return lines.map((l) => { let out = ''; let rest = l; while (Buffer.byteLength(rest) > 74) { let cut = 74; while (Buffer.byteLength(rest.slice(0, cut)) > 74) cut--; out += rest.slice(0, cut) + '\r\n '; rest = rest.slice(cut); } return out + rest; }).join('\r\n') + '\r\n';
   }
 
-  return { handle, svc, notifier, qbo, background, icsFeed, feedToken };
+  return { handle, svc, notifier, qbo, assistant, background, icsFeed, feedToken };
 }
 
 // Brand colors & fonts from config.brand, loaded after style.css.

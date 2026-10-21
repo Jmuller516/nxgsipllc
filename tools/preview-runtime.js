@@ -162,6 +162,11 @@
   async function prepare(html, path) {
     const u = new URL(path, `http://${HOST}/`);
     // Inline stylesheets the page links to on the app.
+    // Inline scripts the page loads from the app (e.g. the chat widget).
+    for (const [tag, src] of [...html.matchAll(/<script src="(\/static\/[^"]+)"[^>]*><\/script>/g)]) {
+      const r = await call('GET', src);
+      html = html.replace(tag, () => `<script>${r.body.replace(/<\/script/gi, '<\\/script')}<\/script>`);
+    }
     const links = [...html.matchAll(/<link rel="stylesheet" href="(\/[^"]+)">/g)];
     for (const [tag, href] of links) {
       const r = await call('GET', href);
@@ -240,17 +245,38 @@
     svc.createLead({ eventType: 'team', name: 'Coach Dave Romano', organization: 'Massapequa 10U Travel', email: 'coach.dave@example.com', groupSize: 14, message: 'Winter skills clinic, 6 weeks on Sunday mornings.' });
   }
 
+  // ---------- chat assistant: runs on in-page Claude (the viewer's own Claude) ----------
+  const SAMPLE_MESSAGES = {
+    not_granted: 'To chat in this preview, allow the page to use Claude when your app asks. On the live site the assistant runs on NXGS’s own account, so customers are never asked.',
+    sampling_disabled: 'Claude isn’t available on this account, so the chat can’t run in the preview.',
+    tools_unavailable: 'This app version can’t run the chat preview. Try the latest Claude app or claude.ai in a browser.',
+    rate_limited: 'Too many messages in a short time. Give it a minute and try again.',
+  };
+  async function assistantRunner({ instructions, turns, tools }) {
+    const sample = window.claude?.use ? await window.claude.use('sample') : null;
+    if (!sample) throw Object.assign(new Error('unavailable'), { userMessage: 'The chat preview needs to be opened inside the Claude app or claude.ai.' });
+    try {
+      const { text } = await sample([{ role: 'user', content: instructions }, ...turns.slice(-30)], {
+        modelTier: 'quick',
+        tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.input_schema, execute: (input) => t.execute(input) })),
+      });
+      return text;
+    } catch (e) {
+      throw Object.assign(new Error(e?.message || 'sample failed'), { userMessage: SAMPLE_MESSAGES[e?.code] || 'Sorry, I lost my connection for a second. Could you send that again?' });
+    }
+  }
+
   // ---------- boot ----------
   async function boot() {
     SQL = await initSqlJs();
     const { createApp } = load('server');
     const db = load('db').open(':memory:');
-    app = createApp(db);
+    app = createApp(db, { assistantRunner });
     seed(app.svc);
     await app.background();
     document.getElementById('loading').hidden = true;
     const start = (location.hash || '').slice(1);
-    navigate({ book: '/book', admin: '/admin', calendar: '/calendar' }[start] || '/calendar');
+    navigate({ book: '/book', admin: '/admin', calendar: '/calendar', chat: '/chat' }[start] || '/calendar');
   }
 
   window.preview = {

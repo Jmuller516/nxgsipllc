@@ -7,6 +7,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 **For customers**
 - **Live availability calendar** (`/calendar`): a month view showing which days are Open, Few left, Booked or Closed. It updates automatically every 30 seconds. Customers tap a day to see open start times, and tapping a time opens the booking form with the date and time filled in. They never see who booked.
 
+- **Chat assistant "Riley"**: a chat bubble on the booking and calendar pages, and a full-page version at `/chat`. It answers questions in a friendly, texting style, checks real availability, quotes exact prices, and books the party, then shows a secure button to pay the deposit. It never takes card numbers in chat. It's labeled as a virtual assistant and, if asked, says it's an AI and offers a call-back from staff. It can also send group/corporate requests and staff follow-ups to your Leads.
+
 **Booking form** (`/book`)
 - Pick a kids party package and number of kids (15 included, $25 each extra, max 20)
 - See only the start times that are actually open. The scheduler enforces:
@@ -28,6 +30,7 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - Lead tracker: new → contacted → quoted → booked/lost, with follow-up dates
 - Reports: revenue by month, plus **vendor order totals** with estimated costs for upcoming parties
 - **Pricing tab**: change any price, cost, minimum, lead time, deposit %, balance due days or tax rate, and turn items on/off. No code changes needed, and add-on margins show as you type.
+- **Chats tab**: every chat conversation, with which ones turned into bookings or leads.
 - **Emails tab**: every email sent (or that would be sent), with a preview and a resend button. Staff get alerts for new parties, new leads and overdue balances.
 - **Settings tab**: connect QuickBooks Online. Every payment (Stripe or desk) becomes a Sales Receipt under the customer.
 - CSV exports for bookings and payments. The payments CSV is laid out for QuickBooks Online import.
@@ -46,7 +49,8 @@ You need **Node.js 22.13 or newer**. There are no other dependencies, so you don
 
 ```bash
 npm run demo     # admin password "demo", payments simulated
-npm test         # 22 automated tests
+npm test         # 29 automated tests
+node tools/build-preview.js   # one-file clickable preview (preview.html)
 ```
 
 Then open http://localhost:3000/book and http://localhost:3000/admin.
@@ -62,6 +66,8 @@ Then open http://localhost:3000/book and http://localhost:3000/admin.
 | `PORT` | Defaults to 3000 |
 | `DB_FILE` | Where bookings are stored. Defaults to `data/nxgs.db`. **Back this file up.** |
 | `EMBED_ORIGINS` | Sites allowed to embed the booking page, e.g. `https://www.nxgs.net`. Defaults to any site. |
+| `ANTHROPIC_API_KEY` | Turns on the chat assistant (see below). |
+| `ASSISTANT_MODEL` | Optional. Defaults to `claude-haiku-5-5` (fast and low-cost). |
 | `RESEND_API_KEY` | Turns on email sending (see below). Without it, emails are only recorded in the admin Emails tab. |
 | `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` / `QBO_ENVIRONMENT` | QuickBooks Online connection (see below). |
 
@@ -73,6 +79,15 @@ Then open http://localhost:3000/book and http://localhost:3000/admin.
    - Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`
    - Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
 3. In **Settings → Customer emails**, turn on "Successful payments" so Stripe emails every customer a receipt.
+
+## Turn on the chat assistant
+
+1. Create an account at [platform.claude.com](https://platform.claude.com), add billing, and create an API key.
+2. Set `ANTHROPIC_API_KEY` and restart. The chat bubble appears on the booking and calendar pages.
+
+The assistant's name, and the model it uses, are in `src/config.js` under `assistant`. It always uses the live prices, add-ons, hours and availability, so price changes on the Pricing tab apply to the chat right away. Built-in limits: 1,000 characters per message, 60 messages per conversation, 40 messages per visitor every 10 minutes, and 3 bookings per conversation. Unpaid chat bookings release their time after 30 minutes, the same as the form.
+
+To put the chat on nxgs.net by itself, add `<script src="https://book.nxgs.net/static/chat.js" defer></script>`, or use the embed with `data-page="chat"`.
 
 ## Turn on emails
 
@@ -114,6 +129,7 @@ src/scheduling.js  open time slots and conflict rules
 src/pricing.js     quotes, tax, deposit, balance due date
 src/bookings.js    bookings, payments, leads, dashboard numbers
 src/stripe.js      Stripe Checkout and webhook verification
+src/assistant.js   chat assistant (Claude API + booking tools)
 src/notifications.js  automatic emails and reminders
 src/quickbooks.js  QuickBooks Online connection and sync
 src/price-settings.js  prices edited from the admin page

@@ -6,6 +6,7 @@
  *
  * Optional on the div:
  *   data-page="calendar"  shows the live availability calendar instead of the booking form
+ *   data-page="chat"      shows the chat assistant full-size
  *   data-tab="inquiry"    opens the group & corporate form first
  * The frame grows and shrinks to fit the booking form, so there is no inner scrollbar.
  */
@@ -18,7 +19,8 @@
     host.dataset.mounted = '1';
     var frame = document.createElement('iframe');
     var tab = host.getAttribute('data-tab');
-    var page = host.getAttribute('data-page') === 'calendar' ? '/calendar' : '/book';
+    var which = host.getAttribute('data-page');
+    var page = which === 'calendar' ? '/calendar' : which === 'chat' ? '/chat' : '/book';
     frame.src = origin + page + '?embed=1' + (tab ? '&tab=' + encodeURIComponent(tab) : '');
     frame.title = 'Book a party';
     frame.loading = 'lazy';

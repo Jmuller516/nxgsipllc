@@ -31,6 +31,12 @@ module.exports = {
     sendBetween: [9, 20],                    // only send reminders between 9 AM and 8 PM facility time
   },
 
+  // Chat assistant (turns on when ANTHROPIC_API_KEY is set). It is an AI and says so if asked.
+  assistant: {
+    name: 'Riley',
+    model: 'claude-haiku-5-5',   // fast and low-cost; ASSISTANT_MODEL overrides
+  },
+
   // QuickBooks Online. Connect from the admin page once QBO_CLIENT_ID / QBO_CLIENT_SECRET are set.
   quickbooks: {
     itemName: 'Party Booking',               // QBO product/service each payment is recorded under (created if missing)

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat with NXGS</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Next Generation Sports Complex</p>
+  <h1>Plan your party</h1>
+  <p class="muted">Chat with our virtual assistant, or <a href="/book">use the booking form</a>.</p>
+  <div id="nxgs-chat-page" class="card" style="padding:0;overflow:hidden">Loading chat…</div>
+</main>
+<script src="/static/chat.js"></script>
+<script>
+  if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embedded');
+  if (window.parent !== window) {
+    const post = () => window.parent.postMessage({ type: 'nxgs:height', height: document.documentElement.scrollHeight }, '*');
+    new ResizeObserver(post).observe(document.body);
+  }
+</script>
+</body>
+</html>

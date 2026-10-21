@@ -68,6 +68,7 @@
     <button class="tab" aria-selected="false" data-tab="leads">Leads <span id="leadCount"></span></button>
     <button class="tab" aria-selected="false" data-tab="reports">Reports</button>
     <button class="tab" aria-selected="false" data-tab="pricing">Pricing</button>
+    <button class="tab" aria-selected="false" data-tab="chats">Chats</button>
     <button class="tab" aria-selected="false" data-tab="emails">Emails</button>
     <button class="tab" aria-selected="false" data-tab="settings">Settings</button>
   </div>
@@ -153,6 +154,14 @@
         <span class="muted" id="priceMsg"></span>
         <button class="btn ghost small" id="priceReset" style="margin-left:auto">Reset all to starting prices</button>
       </div>
+    </div>
+  </section>
+
+  <section id="tab-chats" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Chat assistant</h2>
+      <p class="muted" id="chatMode"></p>
+      <div class="scroll"><table class="list" id="chats"></table></div>
     </div>
   </section>
 
@@ -314,7 +323,24 @@ async function loadLeads() {
   });
 }
 
-function refresh() { return Promise.all([loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadEmails(), loadQbo(), loadFeed()]); }
+function refresh() { return Promise.all([loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadEmails(), loadQbo(), loadFeed()]); }
+
+// ---------- Chats ----------
+async function loadChats() {
+  const r = await api('/api/admin/chats');
+  $('chatMode').innerHTML = r.enabled ? 'Riley is answering customers on the booking and calendar pages. Every conversation is saved here.' : '⚠️ The assistant is off. Add an Anthropic API key (<code>ANTHROPIC_API_KEY</code>) to turn it on (see README).';
+  $('chats').innerHTML = '<tr><th>Last message</th><th>Started with</th><th class="num">Msgs</th><th>Result</th></tr>' +
+    (r.chats.map((c) => `<tr class="click" data-chat="${esc(c.id)}"><td>${esc(c.updated_at.slice(5, 16))}</td><td>${esc(c.first)}</td><td class="num">${c.messages}</td>
+      <td>${c.bookings.length ? `<span class="pill paid">booked ${esc(c.bookings.join(', '))}</span>` : c.leads ? '<span class="pill new">lead</span>' : '<span class="muted">—</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No chats yet.</td></tr>');
+  $('chats').querySelectorAll('[data-chat]').forEach((tr) => tr.onclick = async () => {
+    const t = await api('/api/admin/chats/' + tr.dataset.chat);
+    const d = $('detail');
+    d.innerHTML = `<h2 style="margin-top:0">Chat transcript</h2><div style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow:auto">` +
+      t.transcript.map((m) => `<div style="align-self:${m.role === 'user' ? 'flex-end' : 'flex-start'};max-width:85%;padding:8px 12px;border-radius:14px;white-space:pre-wrap;${m.role === 'user' ? 'background:var(--brand);color:#fff' : 'background:var(--bg);border:1px solid var(--line)'}">${esc(m.text)}${(m.actions || []).map((a) => `<br><span class="pill paid">${esc(a.label)} · ${esc(a.ref)}</span>`).join('')}</div>`).join('') +
+      `</div><div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    d.showModal();
+  });
+}
 
 // ---------- Calendar ----------
 let calMonth = new Date().toLocaleDateString('en-CA').slice(0, 7), calData, calSel = null;
@@ -474,7 +500,7 @@ async function loadQbo() {
 
 document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
   history.replaceState(null, '', '#' + t.dataset.tab);
 });
 const startTab = location.hash.slice(1);
