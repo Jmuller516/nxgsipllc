@@ -1,0 +1,78 @@
+<title>NXGS Party App Preview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim sticky control bar over a full-height frame that runs the real app. */
+  :root {
+    --bg: #eef1f6;
+    --bar: #0d1b33;
+    --bar-ink: #f2f5fb;
+    --bar-muted: #9fb0cc;
+    --accent: #3d7bff;
+    --chip: #1c2c4a;
+    --ink: #0f1b2d;
+    --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0c1220; --bar: #070d1a; --chip: #18233a; --ink: #e9eef7; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #0c1220; --bar: #070d1a; --chip: #18233a; --ink: #e9eef7; color-scheme: dark; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); display: flex; flex-direction: column; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); }
+  header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bar); color: var(--bar-ink);
+    padding-block: 10px 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; gap: 8px; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .brand { font-family: var(--display); font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; text-transform: uppercase; }
+  .brand span { color: var(--bar-muted); font-weight: 600; }
+  .note { font-size: .78rem; color: var(--bar-muted); }
+  nav { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+  nav button { font-family: var(--display); font-weight: 600; font-size: .95rem; letter-spacing: .02em; border: 0; border-radius: 999px; padding: 8px 14px;
+    background: var(--chip); color: var(--bar-ink); cursor: pointer; white-space: nowrap; }
+  nav button[aria-current="true"] { background: var(--accent); color: #fff; }
+  nav button:focus-visible { outline: 2px solid var(--bar-ink); outline-offset: 2px; }
+  #back { background: transparent; color: var(--bar-muted); padding-inline: 8px; font-size: 1.1rem; }
+  #back:disabled { opacity: .35; }
+  main { flex: 1; min-height: 0; position: relative; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  #loading { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; font-size: .95rem; padding: 24px; }
+  [hidden] { display: none !important; }
+  #loading .err { color: #b3261e; font-size: .8rem; }
+  #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(92vw, 460px);
+    background: var(--bar); color: var(--bar-ink); padding: 12px 16px; border-radius: 12px; font-size: .9rem; box-shadow: 0 8px 24px rgb(0 0 0 / .25); z-index: 20; }
+</style>
+
+<header>
+  <div class="top">
+    <div class="brand">NXGS Party App <span>· Preview</span></div>
+    <div class="note">Sample data · payments simulated · nothing is saved</div>
+  </div>
+  <nav aria-label="Preview pages">
+    <button id="back" aria-label="Back" disabled>‹</button>
+    <button data-go="/calendar" id="navCal">Calendar</button>
+    <button data-go="/book" id="navBook">Book a party</button>
+    <button data-go="/admin" id="navAdmin">Admin</button>
+  </nav>
+</header>
+<main>
+  <div id="loading"><p>Loading the NXGS party app…</p></div>
+  <iframe id="appFrame" title="NXGS party app"></iframe>
+</main>
+<div id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-asm.js"></script>
+<script>
+__RUNTIME__
+</script>
+<script>
+  const navButtons = [...document.querySelectorAll('[data-go]')];
+  navButtons.forEach((b) => b.addEventListener('click', () => preview.go(b.dataset.go)));
+  document.getElementById('back').addEventListener('click', () => preview.back());
+  let depth = 0;
+  preview.onRoute((path) => {
+    const section = path.startsWith('/admin') ? '/admin' : path.startsWith('/calendar') ? '/calendar' : (path.startsWith('/book') || path.startsWith('/pay') || path.startsWith('/booking')) ? '/book' : '';
+    navButtons.forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === section)));
+    depth++;
+    document.getElementById('back').disabled = depth < 2;
+  });
+</script>

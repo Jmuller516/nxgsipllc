@@ -12,7 +12,7 @@ const { createQuickBooks } = require('./quickbooks');
 const priceSettings = require('./price-settings');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
 function createApp(db, opts = {}) {
   priceSettings.apply(db); // admin price edits laid over config.js starting prices
@@ -390,6 +390,7 @@ function renderBooking(b, payments, notice, baseUrl) {
   return layout(`Party ${b.ref}`, `
     <div class="card">
       ${notice ? `<p class="banner ok">${esc(notice)}</p>` : ''}
+      <figure class="hero"><img src="/static/img/lobby.jpg" alt="NXGS front desk and lobby"><figcaption>Rendering · NXGS Farmingdale</figcaption></figure>
       <p class="eyebrow">${esc(config.business.name)} · Booking ${esc(b.ref)}</p>
       <h1>${b.child_name ? `${esc(b.child_name)}'s party` : 'Your party'}</h1>
       <p class="status status-${esc(b.status)}">${esc(statusText)}</p>

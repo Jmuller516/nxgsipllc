@@ -11,6 +11,10 @@
 <main>
   <img id="logo" class="page-logo hidden" alt="">
   <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
+  <figure class="hero">
+    <img src="/static/img/field.jpg" alt="The main turf field at NXGS Farmingdale, with stadium seating and lit signage" width="1280" height="720">
+    <figcaption>Rendering · NXGS Farmingdale</figcaption>
+  </figure>
   <h1>Book your event</h1>
   <p class="muted"><a href="/calendar" id="calLink">See the availability calendar →</a></p>
   <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
@@ -24,7 +28,13 @@
   <!-- ============ KIDS PARTY ============ -->
   <form id="partyForm" novalidate>
     <div class="card">
-      <h2 style="margin-top:0">1. Choose a package</h2>
+      <h2 style="margin-top:0">How the party goes</h2>
+      <div class="phases">
+        <figure><img src="/static/img/field.jpg" alt="Turf field" loading="lazy"><figcaption><b>60 min</b> Field play</figcaption></figure>
+        <figure><img src="/static/img/gameroom.jpg" alt="Video game room" loading="lazy"><figcaption><b>30 min</b> Video game room</figcaption></figure>
+        <figure><img src="/static/img/lounge.jpg" alt="Party lounge" loading="lazy"><figcaption><b>30 min</b> Food &amp; cake</figcaption></figure>
+      </div>
+      <h2>1. Choose a package</h2>
       <div class="packages" id="packages"></div>
       <label for="kids">How many kids?</label>
       <input id="kids" name="kids" type="number" min="1" value="15" inputmode="numeric">
@@ -75,7 +85,11 @@
   <!-- ============ INQUIRY ============ -->
   <form id="inquiryForm" class="hidden" novalidate>
     <div class="card">
-      <h2 style="margin-top:0">Tell us about your event</h2>
+      <div class="phases two">
+        <figure><img src="/static/img/courts.jpg" alt="Indoor courts" loading="lazy"><figcaption>Courts &amp; turf for team events</figcaption></figure>
+        <figure><img src="/static/img/training.jpg" alt="Turf training room" loading="lazy"><figcaption>Training room for skill sessions</figcaption></figure>
+      </div>
+      <h2>Tell us about your event</h2>
       <p class="muted">Corporate outings, adult nights, senior groups and team skill building. We'll get back to you with a quote.</p>
       <label for="eventType">Type of event</label><select id="eventType"></select>
       <div class="row">

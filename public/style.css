@@ -111,3 +111,15 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 body.embedded { background: transparent; }
 body.embedded main { padding: 0 0 16px; max-width: none; }
 body.embedded #bizName, body.embedded #logo { display: none; }
+
+/* Facility photos */
+.hero { position: relative; margin: 0 0 18px; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16 / 7; max-width: 100%; background: var(--line); }
+.hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero figcaption, .phases figcaption small { position: absolute; right: 8px; bottom: 8px; font-size: .7rem; color: #fff; background: rgb(0 0 0 / .5); padding: 2px 8px; border-radius: 99px; }
+.phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 6px; }
+.phases.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 16px; }
+.phases figure { margin: 0; min-width: 0; }
+.phases img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block; background: var(--line); }
+.phases figcaption { font-size: .82rem; margin-top: 5px; line-height: 1.3; }
+.phases figcaption b { display: block; color: var(--brand); font-variant-numeric: tabular-nums; }
+body.embedded .hero { display: none; }
