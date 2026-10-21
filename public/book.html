@@ -113,6 +113,7 @@
     <img id="zoomImg" alt="">
     <h2 id="zoomName"></h2>
     <p class="muted" id="zoomDetail"></p>
+    <div id="zoomInclWrap"><h3 class="incl-h">What's included</h3><ul class="incl" id="zoomIncl"></ul></div>
     <form method="dialog"><button class="btn ghost">Close</button></form>
   </dialog>
   <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0">Thanks — we got it!</h2><p>We'll reach out within one business day.</p></div>
@@ -132,6 +133,8 @@ async function api(path, body) {
 
 function ymdLocal(d) { return d.toLocaleDateString('en-CA'); }
 
+const escH = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const incList = (t) => String(t || '').split('\n').filter((x) => x.trim()).map((x) => `<li>${escH(x)}</li>`).join('');
 async function init() {
   CFG = await api('/api/config');
   $('bizName').textContent = CFG.business.name;
@@ -145,8 +148,8 @@ async function init() {
 
   $('packages').innerHTML = CFG.packages.map((p, i) => `
     <label class="pkg"><input type="radio" name="package" value="${p.id}" ${i === 0 ? 'checked' : ''}>
-      <div class="top"><span>${p.name}</span><span>${money(p.priceCents)}</span></div>
-      <p>${p.description}</p></label>`).join('');
+      <div class="top"><span>${escH(p.name)}</span><span>${money(p.priceCents)}</span></div>
+      ${p.includes ? `<ul class="incl">${incList(p.includes)}</ul>` : `<p>${escH(p.description)}</p>`}</label>`).join('');
   $('kids').max = CFG.party.maxKids;
 
   $('addons').innerHTML = CFG.addOnCategories.map((c, i) => {
@@ -154,10 +157,10 @@ async function init() {
     if (!items.length) return '';
     return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${c.name} <span class="muted" data-count="${c.id}"></span></summary>` +
       items.map((a) => `
-      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="See ${a.name}"><img src="${a.photo}" alt="${a.name}" loading="lazy"></button><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}
+      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="See ${a.name}"><img src="${a.photo}" alt="${a.name}" loading="lazy"></button><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}${a.includes ? `<button type="button" class="incl-link" data-zoom="${a.id}">What's included ›</button>` : ''}
           <small><b>${money(a.priceCents)}</b> ${a.unit === 'each' ? 'each' : '/ ' + a.unit}${a.minQty > 1 ? ` · min ${a.minQty}` : ''}${a.leadDays ? ` · order ${a.leadDays >= 28 ? '4 weeks' : a.leadDays >= 14 ? '2 weeks' : a.leadDays + ' days'} ahead` : ''}</small>
           <small class="lead-warn hidden">Not enough time before this date</small></div>
-        <input type="number" min="0" max="200" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${a.name} quantity"></div>`).join('') +
+        <input type="number" min="0" max="${a.maxQty || 200}" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${a.name} quantity"></div>`).join('') +
       '</details>';
   }).join('');
   // Tap a product photo to see it larger.
@@ -165,7 +168,9 @@ async function init() {
     const a = CFG.addOns.find((x) => x.id === b.dataset.zoom);
     $('zoomImg').src = a.photo; $('zoomImg').alt = a.name;
     $('zoomName').textContent = a.name;
-    $('zoomDetail').textContent = [a.detail, `$${(a.priceCents / 100).toFixed(2)} ${a.unit === 'each' ? 'each' : 'per ' + a.unit}`, a.minQty > 1 ? `minimum ${a.minQty}` : ''].filter(Boolean).join(' · ');
+    $('zoomDetail').textContent = [`$${(a.priceCents / 100).toFixed(2)} ${a.unit === 'each' ? 'each' : 'per ' + a.unit}`, a.minQty > 1 ? `minimum ${a.minQty}` : '', a.maxQty === 1 ? 'one per party' : '', a.leadDays ? `order ${a.leadDays} days ahead` : ''].filter(Boolean).join(' · ');
+    $('zoomIncl').innerHTML = incList(a.includes);
+    $('zoomInclWrap').hidden = !a.includes;
     $('zoom').showModal();
   }));
   // Jump straight to the minimum (or one per kid for favors) instead of making people tap 12 times.

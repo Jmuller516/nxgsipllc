@@ -46,9 +46,9 @@ function createAssistant(db, svc, opts = {}) {
     const upcoming = Array.from({ length: 28 }, (_, i) => addDays(today, i)).map((d) => `${dayName(d)} = ${d}`).join('; ');
     const days = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
     const hours = Object.entries(cfg.partyHours).filter(([, h]) => h).map(([d, h]) => `${days[d]} ${scheduling.label12(scheduling.toMinutes(h.open))}–${scheduling.label12(scheduling.toMinutes(h.close))}`).join(', ');
-    const pkgs = cfg.packages.filter((p) => p.active !== false).map((p) => `- ${p.name} (id "${p.id}"): ${money(p.priceCents)}, includes ${p.includedKids} kids, ${money(p.extraKidCents)} per extra child. ${p.description}`).join('\n');
+    const pkgs = cfg.packages.filter((p) => p.active !== false).map((p) => `- ${p.name} (id "${p.id}"): ${money(p.priceCents)}, includes ${p.includedKids} kids, ${money(p.extraKidCents)} per extra child. Includes: ${(p.includes || p.description).split('\n').join('; ')}`).join('\n');
     const cats = Object.fromEntries((cfg.addOnCategories || []).map((c) => [c.id, c.name]));
-    const addOns = cfg.addOns.filter((a) => a.active !== false).map((a) => `- ${a.name} (id "${a.id}", ${cats[a.category] || a.category}): ${money(a.priceCents)}/${a.unit}${a.minQty > 1 ? `, min ${a.minQty}` : ''}${a.leadDays ? `, order ${a.leadDays}+ days before the party` : ''}`).join('\n');
+    const addOns = cfg.addOns.filter((a) => a.active !== false).map((a) => `- ${a.name} (id "${a.id}", ${cats[a.category] || a.category}): ${money(a.priceCents)}/${a.unit}${a.minQty > 1 ? `, min ${a.minQty}` : ''}${a.maxQty === 1 ? ', one per party' : ''}${a.leadDays ? `, order ${a.leadDays}+ days before the party` : ''}${a.includes ? `. Includes: ${a.includes.split('\n').join('; ')}` : ''}`).join('\n');
     const p = cfg.payments;
     return `You are ${name()}, the virtual party planner for ${cfg.business.name} (NXGS), a new indoor sports complex in Farmingdale, NY. You chat with parents and organizers on the NXGS website and help them book kids birthday parties.
 

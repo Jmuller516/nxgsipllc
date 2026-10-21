@@ -341,3 +341,13 @@ test('HTTP: product photos upload, show on the booking page, and can be removed'
     server.close();
   }
 });
+
+test('new add-ons: bagels, coffee, scoreboard and bounce house (one per party)', () => {
+  const base = { packageId: 'rookie', kids: 15, today: '2026-11-01', partyDate: '2026-11-28' };
+  const q = pricing.quote({ ...base, addOns: { bagels: 2, coffee: 1, scoreboard: 1, 'bounce-house': 1 } });
+  assert.equal(q.lines.filter((l) => l.kind === 'addon').length, 4);
+  assert.throws(() => pricing.quote({ ...base, addOns: { 'bounce-house': 2 } }), /limit 1 per party/);
+  assert.throws(() => pricing.quote({ ...base, partyDate: '2026-11-06', addOns: { 'bounce-house': 1 } }), /needs 7 days/);
+  assert.ok(config.addOns.every((a) => a.includes), 'every add-on says what is included');
+  assert.ok(config.packages.every((p) => p.includes));
+});

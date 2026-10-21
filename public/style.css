@@ -134,3 +134,10 @@ body.embedded .hero { display: none; }
 .zoom img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 10px; background: var(--bg); display: block; }
 .zoom h2 { margin: 12px 0 4px; }
 .zoom form { margin: 12px 0 0; }
+
+/* What's included */
+.incl { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }
+.incl li { margin: 2px 0; }
+.incl-h { font-size: .95rem; margin: 14px 0 4px; }
+.zoom .incl { color: var(--ink); }
+.incl-link { display: block; background: none; border: 0; padding: 4px 0 0; color: var(--brand); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; text-align: left; }

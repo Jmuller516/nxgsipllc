@@ -411,7 +411,9 @@ async function loadPricing() {
   $('pricePackages').innerHTML = '<tr><th>On</th><th>Package</th><th>Price $</th><th>Kids incl.</th><th>Extra kid $</th></tr>' +
     PRICING.packages.map((p) => `<tr>
       <td><input type="checkbox" data-g="packages" data-id="${p.id}" data-f="active" ${p.active !== false ? 'checked' : ''}></td>
-      <td class="name"><input data-g="packages" data-id="${p.id}" data-f="name" value="${esc(p.name)}"></td>
+      <td class="name"><input data-g="packages" data-id="${p.id}" data-f="name" value="${esc(p.name)}">
+        <label style="font-size:.78rem;margin:6px 0 2px">What's included (one per line)</label>
+        <textarea rows="4" data-g="packages" data-id="${p.id}" data-f="includes" style="font-size:.85rem">${esc(p.includes || '')}</textarea></td>
       <td><input type="number" step="0.01" min="0" data-g="packages" data-id="${p.id}" data-f="priceCents" data-money value="${dollarsIn(p.priceCents)}"></td>
       <td><input type="number" min="1" data-g="packages" data-id="${p.id}" data-f="includedKids" value="${p.includedKids}"></td>
       <td><input type="number" step="0.01" min="0" data-g="packages" data-id="${p.id}" data-f="extraKidCents" data-money value="${dollarsIn(p.extraKidCents)}"></td></tr>`).join('');
@@ -423,7 +425,9 @@ async function loadPricing() {
         <img src="${esc(a.photo)}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none">
         <div>${esc(a.name)}<br><span class="muted">${esc(a.unit)}${a.vendor ? ' · ' + esc(a.vendor) : ''}</span><br>
           <label class="btn ghost small" style="display:inline-block;margin:4px 0 0;font-weight:600">${a.photo.startsWith('/media/') ? 'Change photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp" data-photo="${a.id}" hidden></label>
-          ${a.photo.startsWith('/media/') ? `<button class="btn ghost small" data-unphoto="${a.id}" style="margin-top:4px">Remove</button>` : ''}</div></div></td>
+          ${a.photo.startsWith('/media/') ? `<button class="btn ghost small" data-unphoto="${a.id}" style="margin-top:4px">Remove</button>` : ''}</div></div>
+        <label style="font-size:.78rem;margin:6px 0 2px">What's included (one per line)</label>
+        <textarea rows="3" data-g="addOns" data-id="${a.id}" data-f="includes" style="font-size:.85rem;min-width:200px">${esc(a.includes || '')}</textarea></td>
       <td><input type="number" step="0.01" min="0" data-g="addOns" data-id="${a.id}" data-f="priceCents" data-money value="${dollarsIn(a.priceCents)}"></td>
       <td><input type="number" step="0.01" min="0" data-g="addOns" data-id="${a.id}" data-f="costCents" data-money value="${dollarsIn(a.costCents || 0)}"></td>
       <td class="num" data-margin="${a.id}"></td>
@@ -443,7 +447,7 @@ async function loadPricing() {
   document.querySelectorAll('[data-unphoto]').forEach((b) => b.onclick = async () => {
     await api(`/api/admin/addons/${b.dataset.unphoto}/photo`, 'DELETE'); await loadPricing(); $('priceMsg').textContent = 'Photo removed. The illustration shows again.';
   });
-  document.querySelectorAll('#tab-pricing input:not([type=file])').forEach((i) => i.oninput = i.onchange = () => onPriceEdit(i));
+  document.querySelectorAll('#tab-pricing input:not([type=file]), #tab-pricing textarea').forEach((i) => i.oninput = i.onchange = () => onPriceEdit(i));
 }
 // Resize a phone photo to at most 1200px wide before uploading.
 function shrinkPhoto(file) {

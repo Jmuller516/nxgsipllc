@@ -31,6 +31,7 @@ function quote(input, cfg = config) {
     if (addOn.active === false) throw new PricingError(`${addOn.name} is no longer offered.`);
     if (!Number.isInteger(qty) || qty < 0 || qty > 200) throw new PricingError(`Invalid quantity for ${addOn.name}.`);
     if (addOn.minQty && qty < addOn.minQty) throw new PricingError(`${addOn.name}: minimum order is ${addOn.minQty}.`);
+    if (addOn.maxQty && qty > addOn.maxQty) throw new PricingError(`${addOn.name}: limit ${addOn.maxQty} per party.`);
     if (addOn.leadDays && daysUntilParty < addOn.leadDays) {
       throw new PricingError(`${addOn.name} needs ${addOn.leadDays} days to make — not available for this party date.`);
     }

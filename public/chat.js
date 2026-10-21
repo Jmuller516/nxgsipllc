@@ -103,7 +103,7 @@
     panel.append(head, log, chips, form);
 
     if (inline) { inline.textContent = ''; inline.appendChild(root); root.append(panel); }
-    else { root.append(bubble, panel); panel.hidden = true; document.body.appendChild(root); }
+    else { root.append(bubble, panel); panel.hidden = true; document.body.appendChild(root); document.body.style.paddingBottom = 'calc(80px + env(safe-area-inset-bottom, 0px))'; }
 
     function scroll() { log.scrollTop = log.scrollHeight; }
     function addMsg(role, text) {

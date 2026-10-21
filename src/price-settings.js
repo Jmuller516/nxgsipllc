@@ -4,8 +4,8 @@
 
 const config = require('./config');
 
-const PACKAGE_FIELDS = { priceCents: 'int', extraKidCents: 'int', includedKids: 'int', name: 'text', description: 'text', active: 'bool' };
-const ADDON_FIELDS = { priceCents: 'int', costCents: 'int', minQty: 'int', leadDays: 'int', name: 'text', detail: 'text', active: 'bool' };
+const PACKAGE_FIELDS = { priceCents: 'int', extraKidCents: 'int', includedKids: 'int', name: 'text', description: 'text', includes: 'longtext', active: 'bool' };
+const ADDON_FIELDS = { priceCents: 'int', costCents: 'int', minQty: 'int', leadDays: 'int', name: 'text', detail: 'text', includes: 'longtext', active: 'bool' };
 const PARTY_FIELDS = { depositPercent: 'int', balanceDueDaysBefore: 'int', taxRatePercent: 'num' };
 
 // Remember the starting values so "reset" works and overrides can be re-applied cleanly.
@@ -23,6 +23,7 @@ function clean(value, type) {
     return n;
   }
   if (type === 'bool') return !!value;
+  if (type === 'longtext') return String(value ?? '').replace(/\r/g, '').trim().slice(0, 1500);
   const s = String(value ?? '').trim();
   if (!s) throw new Error('Names cannot be blank.');
   return s.slice(0, 300);
