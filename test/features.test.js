@@ -292,7 +292,8 @@ test('HTTP: calendar page, calendar API and private Google Calendar feed', async
     const ics = await (await fetch(`${base}/feeds/${app.feedToken()}/parties.ics`)).text();
     assert.match(ics, /BEGIN:VCALENDAR/);
     assert.match(ics, /DTSTART;TZID=America\/New_York:20261128T120000/);
-    assert.match(ics, /SUMMARY:Sam\\, Jr\.'s party · 15 kids/);
+    assert.match(ics, /SUMMARY:\[Farmingdale\] Sam\\, Jr\.'s party · 15 kids/);
+    assert.match(ics, /LOCATION:NXGS Farmingdale\\, 388 Broad Hollow Rd/);
     assert.match(ics, /DTSTART;VALUE=DATE:20261129/);
     assert.ok(ics.split('\r\n').every((l) => Buffer.byteLength(l) <= 75));
 

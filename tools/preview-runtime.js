@@ -237,6 +237,19 @@
 
   function seed(app) {
     const svc = app.svc;
+    // Sample partners (made-up names, for the preview only)
+    const vend = app.marketplace.applyAsVendor({ businessName: 'Sample Sweets Bakery', contactName: 'Kim Lee', email: 'kim@example.com', phone: '(516) 555-0150', category: 'Food & treats',
+      description: 'Sample vendor for the preview. Custom decorated cookies and treats.', audiences: ['birthday', 'corporate'], insured: true,
+      products: [{ name: 'Custom cookie favors', description: '2 decorated sugar cookies in team colors', price: '4.00', minQty: 12, leadDays: 10 }, { name: 'Cookie platter', description: 'Assorted cookies for the office', price: '45', unit: 'each', leadDays: 5 }] });
+    app.marketplace.updateVendor(vend.id, { status: 'approved' });
+    const pv = app.marketplace.getVendor(vend.id).products;
+    app.marketplace.saveProduct(vend.id, pv[0].id, { active: true, includes: '2 decorated sugar cookies\nTeam colors and the birthday child’s number\nIndividually bagged with ribbon' });
+    app.marketplace.saveProduct(vend.id, pv[1].id, { active: true, audience: 'corporate' });
+    app.marketplace.applyAsVendor({ businessName: 'Sample Balloon Studio', contactName: 'Al Russo', email: 'al@example.com', category: 'Decorations & balloons', audiences: ['birthday'],
+      description: 'Sample application waiting for review.', products: [{ name: 'Balloon arch', description: '8 ft arch in team colors', price: '120', unit: 'party', leadDays: 5 }] });
+    const cookieId = `mp-${pv[0].id}`;
+    const sp = app.sponsors.create({ name: 'Sample Sponsor Co.', tagline: 'Your brand could be here', packageId: 'presenting', placements: ['booking', 'calendar', 'invite', 'email'], contractDollars: 6000, billing: '12 months', contactName: 'Pat Brand' });
+    app.sponsors.create({ name: 'Sample Local Gym', packageId: 'scoreboard', placements: [], contractDollars: 3600, billing: 'monthly' });
     const today = new Date();
     const ymd = (d) => d.toLocaleDateString('en-CA');
     const days = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
@@ -260,7 +273,7 @@
     const sat1 = nextDow(3, 6), sun1 = nextDow(3, 0), fri1 = nextDow(3, 5);
     const sat2 = nextDow(10, 6), sun2 = nextDow(10, 0), sat3 = nextDow(17, 6), sun3 = nextDow(17, 0), sat4 = nextDow(31, 6);
     // The showcase party: details filled in, guests replied, some waivers signed.
-    const show = book(sat3, '13:00', { pkg: 'mvp', kids: 16, addOns: { shirts: 16, scoreboard: 1, 'favor-box': 16, pizza: 2 }, host: 'Coach Mike',
+    const show = book(sat3, '13:00', { pkg: 'mvp', kids: 16, addOns: { shirts: 16, scoreboard: 1, 'favor-box': 16, pizza: 2, [cookieId]: 16 }, host: 'Coach Mike',
       details: { theme: 'soccer', allergies: 'Liam: tree nuts', jerseyNumber: '7', shirtSizes: { YS: 4, YM: 8, YL: 4 } } });
     if (show) {
       sampleBooking = `/booking/${show.ref}?t=${show.token}`;

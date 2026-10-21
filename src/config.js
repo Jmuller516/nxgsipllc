@@ -10,9 +10,7 @@ module.exports = {
     website: 'https://www.nxgs.net',
     email: 'joseph@nxgs.net',
     timezone: 'America/New_York',
-    address: '388 Broad Hollow Rd, Farmingdale, NY',
-    // Second location (not bookable yet; for when the app supports more than one site):
-    // NXGS Massapequa, 400 Carman Mill Rd, Massapequa, NY
+    address: '388 Broad Hollow Rd, Farmingdale, NY 11735',   // main address (Farmingdale)
     phone: null,                  // front desk number shown to customers, e.g. '(516) 555-0100'
   },
 
@@ -130,6 +128,7 @@ module.exports = {
     { id: 'favors', name: 'Party favors & keepsakes' },
     { id: 'decor', name: 'Decorations & party extras' },
     { id: 'fun', name: 'Entertainment & upgrades' },
+    { id: 'partners', name: 'From our partners' },   // approved outside vendors (Admin → Marketplace)
   ],
 
   // Optional add-ons.
@@ -184,12 +183,38 @@ module.exports = {
   ],
 
   // Non-party events go to an inquiry/lead form; staff follow up with a quote.
+  // Locations. Customers only see locations with public: true. Staff see all of them in Admin.
+  // Each location has its own calendar, closures, run sheets and reports.
+  // partyHours / maxConcurrentParties left out = use the defaults above.
+  locations: [
+    { id: 'farmingdale', name: 'NXGS Farmingdale', shortName: 'Farmingdale', address: '388 Broad Hollow Rd, Farmingdale, NY 11735', phone: null, public: true, entity: 'Next Generation Sports Complex LLC' },
+    { id: 'massapequa', name: 'NXGS Massapequa', shortName: 'Massapequa', address: '400 Carman Mill Rd, Massapequa, NY 11758', phone: null, public: false, entity: 'NXGS2 LLC' },
+  ],
+  defaultLocation: 'farmingdale',
+
+  // Sponsorship packages you can sell. Prices are starting points.
+  // Placements: booking (booking page), calendar, invite (every party invitation), email (customer emails), runsheet (staff only).
+  sponsorPackages: [
+    { id: 'presenting', name: 'Presenting party sponsor', placements: ['booking', 'calendar', 'invite', 'email'], suggestedMonthlyCents: 50000, description: 'Logo and "Parties presented by" on the booking page, calendar, every invitation and every customer email.' },
+    { id: 'invitations', name: 'Invitation sponsor', placements: ['invite'], suggestedMonthlyCents: 25000, description: 'Logo on every digital party invitation guests open.' },
+    { id: 'booking', name: 'Booking page sponsor', placements: ['booking', 'calendar'], suggestedMonthlyCents: 20000, description: 'Logo on the booking page and availability calendar.' },
+    { id: 'scoreboard', name: 'Video scoreboard spot', placements: [], suggestedMonthlyCents: 30000, description: 'Ad on the video scoreboard during parties (shown in the building).' },
+    { id: 'goodie-bag', name: 'Goodie bag insert', placements: [], suggestedMonthlyCents: 15000, description: 'Sponsor flyer, coupon or sample in party goodie bags.' },
+  ],
+
+  // Outside vendors who sell through NXGS (Admin → Marketplace).
+  marketplace: {
+    defaultMarkupPercent: 35,     // NXGS markup on the vendor's price unless set per vendor or product
+    payoutTerms: 'Net 15 after the party',
+  },
+
   inquiryTypes: [
     { id: 'corporate', name: 'Corporate event' },
     { id: 'adult', name: 'Adult event / league night' },
     { id: 'senior', name: 'Senior event' },
     { id: 'team', name: 'Team skill building' },
     { id: 'other', name: 'Something else' },
+    { id: 'sponsor', name: 'Sponsorship inquiry', hidden: true },   // from the Partners page
   ],
 
   // Sport themes parents can pick. Used on invitations, the details form and the staff run sheet.

@@ -47,6 +47,8 @@
     <figcaption>Rendering · NXGS Farmingdale</figcaption>
   </figure>
   <h1>Party availability</h1>
+  <div id="locBox"></div>
+  <div id="sponsorBox"></div>
   <p class="live" id="live">Live — updates automatically</p>
 
   <div class="card">
@@ -75,11 +77,12 @@
   </div>
 </main>
 
+<script src="/static/sponsors.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const embedded = params.get('embed') ? '&embed=1' : '';
-let CFG, month, selected = null, refreshTimer;
+let CFG, month, selected = null, refreshTimer, LOCATION = null;
 
 const STATUS = { open: 'Open', few: 'Few left', full: 'Booked', closed: '', past: '', later: '', call: 'Call us' };
 
@@ -96,6 +99,18 @@ function addMonths(m, n) { const [y, mo] = m.split('-').map(Number); return ym(n
 async function init() {
   CFG = await getJSON('/api/config');
   $('bizName').textContent = CFG.business.name;
+  // Location: a picker only when more than one location takes bookings.
+  LOCATION = params.get('location') && CFG.locations.some((l) => l.id === params.get('location')) ? params.get('location') : CFG.defaultLocation;
+  const locBox = $('locBox');
+  if (CFG.locations.length > 1) {
+    locBox.innerHTML = '<label for="locSel" style="margin-top:0">Location</label><select id="locSel">' + CFG.locations.map((l) => `<option value="${l.id}" ${l.id === LOCATION ? 'selected' : ''}>${l.name} · ${l.address}</option>`).join('') + '</select>';
+    $('locSel').onchange = () => { LOCATION = $('locSel').value; onLocationChange(); };
+  } else {
+    const l = CFG.locations[0];
+    locBox.innerHTML = `<p class="muted" style="margin:0 0 12px">📍 ${l.name} · ${l.address}</p>`;
+  }
+  NXSponsors.mount($('sponsorBox'), 'calendar', LOCATION);
+  window.onLocationChange = () => { NXSponsors.mount($('sponsorBox'), 'calendar', LOCATION); selected = null; $('dayCard').classList.add('hidden'); load(); };
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
   if (embedded) { document.body.classList.add('embedded'); $('inquiryLink').href = '/book?embed=1&tab=inquiry'; }
   month = params.get('month') || ym(new Date());
@@ -109,7 +124,7 @@ async function init() {
 
 async function load(quiet) {
   try {
-    const cal = await getJSON('/api/calendar?month=' + month);
+    const cal = await getJSON(`/api/calendar?month=${month}&location=${LOCATION}`);
     render(cal);
     if (selected) await showDay(selected, true);
     $('live').textContent = 'Live — updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -142,14 +157,14 @@ function render(cal) {
 
 async function showDay(date, quiet) {
   const card = $('dayCard');
-  const res = await getJSON('/api/availability?date=' + date).catch(() => null);
+  const res = await getJSON(`/api/availability?date=${date}&location=${LOCATION}`).catch(() => null);
   if (!res) return;
   card.classList.remove('hidden');
   $('dayTitle').textContent = new Date(date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const open = res.slots.filter((s) => s.available);
   $('dayHint').textContent = open.length ? 'Tap a start time to book. Every party is 2 hours.' : 'This day just filled up — please choose another.';
   $('times').innerHTML = res.slots.map((s) => s.available
-    ? `<a class="time" href="/book?date=${date}&time=${s.time}${embedded}">${s.label}<small>to ${s.endLabel}</small></a>`
+    ? `<a class="time" href="/book?date=${date}&time=${s.time}&location=${LOCATION}${embedded}">${s.label}<small>to ${s.endLabel}</small></a>`
     : `<span class="time taken">${s.label}<small>taken</small></span>`).join('');
   if (!quiet) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }

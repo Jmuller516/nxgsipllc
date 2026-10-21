@@ -58,7 +58,11 @@
 <body>
 <main>
   <p class="eyebrow">NXGS · Party &amp; events</p>
-  <h1>Admin</h1>
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap">
+    <h1 style="margin:0">Admin</h1>
+    <div><label for="loc" style="margin:0 0 4px">Location</label><select id="loc" style="min-width:200px"></select></div>
+  </div>
+  <p class="muted" id="locNote" style="margin:6px 0 14px"></p>
 
   <div class="tiles" id="tiles"></div>
 
@@ -72,6 +76,8 @@
     <button class="tab" aria-selected="false" data-tab="waivers">Waivers</button>
     <button class="tab" aria-selected="false" data-tab="gifts">Gift cards</button>
     <button class="tab" aria-selected="false" data-tab="reviews">Reviews</button>
+    <button class="tab" aria-selected="false" data-tab="sponsors">Sponsors</button>
+    <button class="tab" aria-selected="false" data-tab="marketplace">Marketplace</button>
     <button class="tab" aria-selected="false" data-tab="emails">Messages</button>
     <button class="tab" aria-selected="false" data-tab="settings">Settings</button>
   </div>
@@ -200,6 +206,34 @@
     </div>
   </section>
 
+  <section id="tab-sponsors" class="hidden">
+    <div class="tiles" id="spTiles"></div>
+    <div class="card">
+      <div class="card-head"><h2>Sponsors</h2><button class="btn small" id="spAdd">+ Add sponsor</button></div>
+      <p class="muted">Sponsor inquiries from the <a href="/partners?tab=sponsor" target="_blank">Partners page</a> arrive in Leads. A logo shows only while the sponsor is active and inside its dates.</p>
+      <div class="scroll"><table class="list" id="sponsors"></table></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Packages you can sell</h2>
+      <div class="scroll"><table class="list" id="spPkgs"></table></div>
+      <p class="muted small">Edit packages and starting prices in src/config.js (sponsorPackages).</p>
+    </div>
+  </section>
+
+  <section id="tab-marketplace" class="hidden">
+    <div class="tiles" id="mpTiles"></div>
+    <div class="card">
+      <h2 style="margin-top:0">Vendors</h2>
+      <p class="muted" id="mpNote"></p>
+      <div class="scroll"><table class="list" id="mpVendors"></table></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Partner orders & payouts</h2>
+      <p class="muted">Orders are created and emailed to the vendor when a family pays. Mark them delivered after the party, then paid out once you’ve paid the vendor.</p>
+      <div class="scroll"><table class="list" id="vorders"></table></div>
+    </div>
+  </section>
+
   <section id="tab-emails" class="hidden">
     <div class="card">
       <h2 style="margin-top:0">Emails</h2>
@@ -253,7 +287,7 @@ async function api(path, method = 'GET', body) {
 
 let SUMMARY;
 async function loadSummary() {
-  SUMMARY = await api('/api/admin/summary');
+  SUMMARY = await api('/api/admin/summary?location=' + LOC);
   const s = SUMMARY;
   $('tiles').innerHTML = `
     <div class="tile"><b>${s.upcoming.n}</b><span>Upcoming parties</span></div>
@@ -271,7 +305,7 @@ async function loadSummary() {
 
 async function loadBookings() {
   const st = $('fStatus').value;
-  const qs = new URLSearchParams();
+  const qs = new URLSearchParams({ location: LOC });
   if ($('fFrom').value) qs.set('from', $('fFrom').value);
   if ($('fTo').value) qs.set('to', $('fTo').value);
   if (st && st !== 'all') qs.set('status', st);
@@ -318,7 +352,7 @@ async function openBooking(id) {
     <h2>Guests & waivers</h2>
     <p>${b.guests.yes} coming · ${b.guests.no} not coming · waivers ${b.guests.waiversSigned}/${b.guests.waiversNeeded}${b.guests.missingWaivers.length ? ` · <span class="no">missing: ${esc(b.guests.missingWaivers.join(', '))}</span>` : ''}</p>
     ${b.guests.allergies.length ? `<p class="error">Allergies: ${esc(b.guests.allergies.map((a) => `${a.who}: ${a.note}`).join(' · '))}</p>` : ''}
-    <div class="actions"><a class="btn ghost small" href="/admin/runsheet?date=${esc(b.party_date)}" target="_blank">Run sheet for this day</a>${b.invite_token ? `<a class="btn ghost small" href="/invite/${esc(b.invite_token)}" target="_blank">Invitation page</a>` : ''}</div>
+    <div class="actions"><a class="btn ghost small" href="/admin/runsheet?date=${esc(b.party_date)}&location=${esc(b.location_id)}" target="_blank">Run sheet for this day</a>${b.invite_token ? `<a class="btn ghost small" href="/invite/${esc(b.invite_token)}" target="_blank">Invitation page</a>` : ''}</div>
     ${b.review ? `<h2>Review</h2><p>${'★'.repeat(b.review.rating)}${'☆'.repeat(5 - b.review.rating)} ${esc(b.review.comment || '')}</p>` : ''}
     <h2>Schedule</h2>
     <ul class="schedule">${b.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
@@ -373,7 +407,7 @@ async function openBooking(id) {
 
 async function loadLeads() {
   const leads = await api('/api/admin/leads');
-  const types = { corporate: 'Corporate', adult: 'Adult', senior: 'Senior', team: 'Team skills', other: 'Other' };
+  const types = { corporate: 'Corporate', adult: 'Adult', senior: 'Senior', team: 'Team skills', other: 'Other', sponsor: 'Sponsorship' };
   $('leads').innerHTML = '<tr><th>Received</th><th>Type</th><th>Contact</th><th class="hide-sm">Date / size</th><th>Status</th><th class="hide-sm">Follow up</th></tr>' +
     (leads.map((l) => `<tr>
       <td>${esc(l.created_at.slice(0, 10))}</td>
@@ -391,7 +425,139 @@ async function loadLeads() {
   });
 }
 
-function refresh() { return Promise.all([loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadWaivers(), loadGifts(), loadReviews(), loadWaiverText(), loadEmails(), loadQbo(), loadFeed()]); }
+// ---------- Location switcher ----------
+let LOC = (() => { try { return localStorage.getItem('nxgs-admin-loc') || 'farmingdale'; } catch { return 'farmingdale'; } })();
+let LOCS = [];
+async function loadLocations() {
+  LOCS = await api('/api/admin/locations');
+  if (!LOCS.some((l) => l.id === LOC)) LOC = LOCS[0].id;
+  $('loc').innerHTML = LOCS.map((l) => `<option value="${esc(l.id)}" ${l.id === LOC ? 'selected' : ''}>${esc(l.name)}${l.public ? '' : ' (not public yet)'}</option>`).join('');
+  const l = LOCS.find((x) => x.id === LOC);
+  $('locNote').textContent = `${l.address}${l.public ? '' : ' · Customers can’t book this location yet. Staff can still set up its calendar and closures.'}`;
+}
+$('loc').onchange = () => { LOC = $('loc').value; try { localStorage.setItem('nxgs-admin-loc', LOC); } catch {} loadLocations().then(refresh); };
+
+// ---------- Sponsors ----------
+let SP;
+const placementNames = { booking: 'Booking page', calendar: 'Calendar', invite: 'Invitations', email: 'Emails', runsheet: 'Run sheet' };
+async function loadSponsors() {
+  SP = await api('/api/admin/sponsors');
+  const t = SP.totals;
+  $('spTiles').innerHTML = `<div class="tile"><b>${t.activeCount}</b><span>Live sponsors</span></div><div class="tile"><b>${money(t.activeContractCents)}</b><span>Live contract value</span></div>
+    <div class="tile"><b>${t.impressions.toLocaleString()}</b><span>Logo views</span></div><div class="tile"><b>${t.clicks.toLocaleString()}</b><span>Clicks</span></div>`;
+  $('sponsors').innerHTML = '<tr><th>Sponsor</th><th>Package & placements</th><th class="hide-sm">Dates</th><th class="num">Value</th><th class="num">Views / clicks</th><th></th></tr>' +
+    (SP.sponsors.map((x) => `<tr><td>${x.logo ? `<img src="${esc(x.logo)}" alt="" style="height:24px;max-width:90px;object-fit:contain;display:block;margin-bottom:4px">` : ''}<b>${esc(x.name)}</b><br>${x.live ? '<span class="pill paid">live</span>' : `<span class="pill ${x.status === 'active' ? 'pending' : 'cancelled'}">${x.status === 'active' ? 'scheduled / ended' : esc(x.status)}</span>`}</td>
+      <td>${esc(SP.packages.find((p) => p.id === x.package_id)?.name || 'Custom')}<br><span class="muted">${esc(x.placements.map((p) => placementNames[p]).join(', ') || 'In-building only')}${x.location_id ? ' · ' + esc(SP.locations.find((l) => l.id === x.location_id)?.name || '') : ''}</span></td>
+      <td class="hide-sm">${esc(x.starts_on || 'now')} → ${esc(x.ends_on || 'open')}</td>
+      <td class="num">${money(x.contract_cents)}${x.billing ? `<br><span class="muted">${esc(x.billing)}</span>` : ''}</td>
+      <td class="num">${x.impressions.toLocaleString()} / ${x.clicks.toLocaleString()}<br><span class="muted">${x.ctr}% CTR</span></td>
+      <td><button class="btn ghost small" data-sp="${x.id}">Edit</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No sponsors yet.</td></tr>');
+  $('sponsors').querySelectorAll('[data-sp]').forEach((b) => b.onclick = () => sponsorDialog(SP.sponsors.find((x) => x.id === Number(b.dataset.sp))));
+  $('spPkgs').innerHTML = '<tr><th>Package</th><th>Where it shows</th><th class="num">Starting at</th></tr>' + SP.packages.map((p) => `<tr><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.description)}</span></td><td>${esc(p.placements.map((x) => placementNames[x]).join(', ') || 'In the building')}</td><td class="num">${money(p.suggestedMonthlyCents)}/mo</td></tr>`).join('');
+}
+$('spAdd').onclick = () => sponsorDialog(null);
+function sponsorDialog(x) {
+  const d = $('detail');
+  const v = x || { placements: [], status: 'active' };
+  d.innerHTML = `<h2 style="margin-top:0">${x ? 'Edit sponsor' : 'Add sponsor'}</h2>
+    <div class="row"><div><label for="spName">Sponsor name</label><input id="spName" value="${esc(v.name || '')}"></div><div><label for="spWeb">Website</label><input id="spWeb" value="${esc(v.website || '')}" placeholder="https://"></div></div>
+    <label for="spTag">Tagline <span class="muted">(optional, short)</span></label><input id="spTag" maxlength="140" value="${esc(v.tagline || '')}">
+    <div class="row"><div><label for="spPkg">Package</label><select id="spPkg"><option value="">Custom</option>${SP.packages.map((p) => `<option value="${p.id}" ${v.package_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div><label for="spLoc">Location</label><select id="spLoc"><option value="">All locations</option>${SP.locations.map((l) => `<option value="${l.id}" ${v.location_id === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></div></div>
+    <label>Logo shows on</label>${SP.placements.map((p) => `<label class="check" style="margin:4px 0"><input type="checkbox" data-pl="${p}" ${v.placements.includes(p) ? 'checked' : ''}> ${placementNames[p]}</label>`).join('')}
+    <div class="row"><div><label for="spStart">Starts</label><input id="spStart" type="date" value="${esc(v.starts_on || '')}"></div><div><label for="spEnd">Ends</label><input id="spEnd" type="date" value="${esc(v.ends_on || '')}"></div></div>
+    <div class="row"><div><label for="spVal">Contract value ($)</label><input id="spVal" type="number" min="0" step="1" value="${v.contract_cents != null ? (v.contract_cents / 100).toFixed(0) : ''}"></div><div><label for="spBill">Billing</label><input id="spBill" value="${esc(v.billing || '')}" placeholder="e.g. monthly, 12-month term"></div></div>
+    <div class="row"><div><label for="spCN">Contact name</label><input id="spCN" value="${esc(v.contact_name || '')}"></div><div><label for="spCE">Contact email</label><input id="spCE" type="email" value="${esc(v.contact_email || '')}"></div></div>
+    <label for="spCP">Contact phone</label><input id="spCP" value="${esc(v.contact_phone || '')}">
+    <label for="spStatus">Status</label><select id="spStatus">${['active', 'paused', 'ended'].map((st) => `<option ${v.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select>
+    <label for="spNotes">Notes</label><textarea id="spNotes" rows="2">${esc(v.notes || '')}</textarea>
+    ${x ? `<label>Logo</label>${v.logo ? `<img src="${esc(v.logo)}" alt="" style="height:40px;max-width:160px;object-fit:contain;display:block;margin:4px 0">` : ''}<label class="btn ghost small" style="display:inline-block;margin:4px 0">${v.logo ? 'Change logo' : 'Upload logo'}<input type="file" id="spLogo" accept="image/png,image/jpeg,image/webp" hidden></label>` : '<p class="muted small">Save first, then upload the logo.</p>'}
+    <div id="spErr" class="error hidden"></div>
+    <div class="actions"><button class="btn" id="spSave">Save</button><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+  $('spPkg').onchange = () => { const pkg = SP.packages.find((p) => p.id === $('spPkg').value); if (pkg) d.querySelectorAll('[data-pl]').forEach((c) => { c.checked = pkg.placements.includes(c.dataset.pl); }); };
+  $('spSave').onclick = async () => {
+    const body = { name: $('spName').value, website: $('spWeb').value, tagline: $('spTag').value, packageId: $('spPkg').value || null, locationId: $('spLoc').value || null,
+      placements: [...d.querySelectorAll('[data-pl]:checked')].map((c) => c.dataset.pl), startsOn: $('spStart').value || null, endsOn: $('spEnd').value || null,
+      contractDollars: $('spVal').value || 0, billing: $('spBill').value, contactName: $('spCN').value, contactEmail: $('spCE').value, contactPhone: $('spCP').value, status: $('spStatus').value, notes: $('spNotes').value };
+    try { const saved = x ? await api('/api/admin/sponsors/' + x.id, 'PATCH', body) : await api('/api/admin/sponsors', 'POST', body); await loadSponsors(); if (!x) sponsorDialog(SP.sponsors.find((s) => s.id === saved.id)); else d.close(); }
+    catch (e) { $('spErr').textContent = e.message; $('spErr').classList.remove('hidden'); }
+  };
+  if ($('spLogo')) $('spLogo').onchange = async () => {
+    try { await api(`/api/admin/sponsors/${x.id}/logo`, 'POST', { dataUrl: await shrinkPhoto($('spLogo').files[0], 'image/png') }); await loadSponsors(); sponsorDialog(SP.sponsors.find((s) => s.id === x.id)); }
+    catch (e) { $('spErr').textContent = e.message; $('spErr').classList.remove('hidden'); }
+  };
+  if (!d.open) d.showModal();
+}
+
+// ---------- Marketplace ----------
+let MP;
+async function loadMarketplace() {
+  MP = await api('/api/admin/marketplace');
+  const t = MP.totals;
+  $('mpTiles').innerHTML = `<div class="tile"><b>${money(t.revenueCents)}</b><span>Partner sales</span></div><div class="tile"><b>${money(t.marginCents)}</b><span>NXGS margin</span></div>
+    <div class="tile ${t.owedCents ? 'alert' : ''}"><b>${money(t.owedCents)}</b><span>Owed to vendors</span></div><div class="tile ${t.applications ? 'alert' : ''}"><b>${t.applications}</b><span>Applications waiting</span></div>`;
+  $('mpNote').innerHTML = `Vendors apply at <a href="/partners" target="_blank">/partners</a>. Default markup: <b>${MP.defaultMarkupPercent}%</b> on the vendor’s price (change per vendor or per product). Payout terms: ${esc(MP.payoutTerms)}.`;
+  $('mpVendors').innerHTML = '<tr><th>Vendor</th><th>Status</th><th class="num">Products</th><th class="num">Owed</th><th></th></tr>' +
+    (MP.vendors.map((v) => `<tr class="click" data-v="${v.id}"><td><b>${esc(v.business_name)}</b><br><span class="muted">${esc(v.category || '')} · ${esc(v.contact_name)}</span></td>
+      <td><span class="pill ${{ applied: 'new', approved: 'paid', rejected: 'cancelled', paused: 'pending' }[v.status]}">${esc(v.status)}</span></td>
+      <td class="num">${v.live_count} live / ${v.product_count}</td><td class="num">${money(v.owed_cents)}</td><td><button class="btn ghost small">Open</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No vendors yet. Share the Partners page with vendors you’d like to work with.</td></tr>');
+  $('mpVendors').querySelectorAll('[data-v]').forEach((tr) => tr.onclick = () => vendorDialog(Number(tr.dataset.v)));
+  const st = ['new', 'confirmed', 'delivered', 'paid_out', 'cancelled'];
+  $('vorders').innerHTML = '<tr><th>Party</th><th>Vendor & item</th><th class="num">You pay</th><th class="num">Customer paid</th><th>Status</th></tr>' +
+    (MP.orders.map((o) => `<tr><td>${esc(fmtDate(o.party_date))}<br><span class="muted">${esc(o.ref)}${o.child_name ? ' · ' + esc(o.child_name) : ''}</span></td><td><b>${esc(o.business_name)}</b><br>${esc(o.product_name)} × ${o.qty}</td>
+      <td class="num">${money(o.unit_cost_cents * o.qty)}</td><td class="num">${money(o.unit_price_cents * o.qty)}</td>
+      <td><select data-o="${o.id}">${st.map((x) => `<option value="${x}" ${o.status === x ? 'selected' : ''}>${x.replace('_', ' ')}</option>`).join('')}</select></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No partner orders yet.</td></tr>');
+  $('vorders').querySelectorAll('[data-o]').forEach((sel) => sel.onchange = async () => { await api('/api/admin/vendor-orders/' + sel.dataset.o, 'PATCH', { status: sel.value }); loadMarketplace(); });
+}
+
+async function vendorDialog(id) {
+  const v = await api('/api/admin/vendors/' + id);
+  const d = $('detail');
+  const prodRow = (p) => {
+    const k = p ? p.id : 'new';
+    return `<tr data-prow="${k}">
+      <td style="min-width:180px">${p ? `<img src="${esc(p.photo || '/static/img/addons/partner.svg')}" alt="" style="width:56px;height:42px;object-fit:cover;border-radius:6px;display:block;margin-bottom:4px"><label class="btn ghost small" style="display:inline-block;margin:0 0 4px">Photo<input type="file" accept="image/jpeg,image/png,image/webp" data-pphoto="${p.id}" hidden></label>` : ''}
+        <input data-k="name" value="${esc(p?.name || '')}" placeholder="Product name"><input data-k="detail" value="${esc(p?.detail || '')}" placeholder="Short description" style="margin-top:4px">
+        <textarea data-k="includes" rows="2" placeholder="What's included (one per line)" style="margin-top:4px;font-size:.85rem">${esc(p?.includes || '')}</textarea></td>
+      <td><input data-k="cost" type="number" step="0.01" min="0" value="${p ? (p.cost_cents / 100).toFixed(2) : ''}" style="min-width:80px"><br><select data-k="unit" style="margin-top:4px">${['each', 'dozen', 'set', 'party', 'hour'].map((u) => `<option ${p?.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select></td>
+      <td><input data-k="markupPercent" type="number" step="1" min="0" placeholder="${v.markup_percent ?? MP.defaultMarkupPercent}" value="${p?.markup_percent ?? ''}" style="min-width:70px"></td>
+      <td><input data-k="price" type="number" step="0.01" min="0" placeholder="auto" value="${p?.price_cents != null ? (p.price_cents / 100).toFixed(2) : ''}" style="min-width:80px"></td>
+      <td class="num" data-calc>${p ? `${money(p.priceApplied)}<br><span class="muted">+${money(p.marginCents)}</span>` : ''}</td>
+      <td><input data-k="minQty" type="number" min="1" value="${p?.min_qty ?? 1}" style="min-width:60px"><br><input data-k="leadDays" type="number" min="0" value="${p?.lead_days ?? 7}" style="min-width:60px;margin-top:4px" title="Days notice"></td>
+      <td><select data-k="audience">${['birthday', 'corporate', 'both'].map((a) => `<option ${p?.audience === a ? 'selected' : ''}>${a}</option>`).join('')}</select><br><label class="check" style="margin:6px 0 0"><input type="checkbox" data-k="active" ${p?.active ? 'checked' : ''}> Live</label></td>
+      <td><button class="btn small" data-psave="${k}">${p ? 'Save' : 'Add'}</button></td></tr>`;
+  };
+  d.innerHTML = `<p class="eyebrow">Vendor · <span class="pill">${esc(v.status)}</span></p><h2 style="margin-top:4px">${esc(v.business_name)}</h2>
+    <dl class="facts"><dt>Contact</dt><dd>${esc(v.contact_name)}</dd><dt>Email</dt><dd>${esc(v.email)}</dd>${v.phone ? `<dt>Phone</dt><dd>${esc(v.phone)}</dd>` : ''}
+      ${v.website ? `<dt>Website</dt><dd><a href="${esc(v.website)}" target="_blank" rel="noopener">${esc(v.website)}</a></dd>` : ''}<dt>Sells to</dt><dd>${esc(v.audiences.join(', '))}</dd>
+      <dt>Insurance</dt><dd>${v.insured ? 'Says they carry liability insurance' : '<span class="no">Not stated</span>'}</dd>${v.description ? `<dt>About</dt><dd>${esc(v.description)}</dd>` : ''}</dl>
+    <div class="row"><div><label for="vMark">Markup for this vendor (%)</label><input id="vMark" type="number" min="0" placeholder="${MP.defaultMarkupPercent} (default)" value="${v.markup_percent ?? ''}"></div>
+      <div><label for="vStatus">Status</label><select id="vStatus">${['applied', 'approved', 'paused', 'rejected'].map((st) => `<option ${v.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select></div></div>
+    <label for="vNotes">Notes <span class="muted">(staff only)</span></label><textarea id="vNotes" rows="2">${esc(v.notes || '')}</textarea>
+    <div class="actions"><button class="btn" id="vSave">Save vendor</button></div>
+    <h2>Products</h2><p class="muted small">Vendor price is what NXGS pays. Customer price = vendor price + markup, unless you type a price. Only “Live” products of an approved vendor appear on the booking page.</p>
+    <div class="scroll"><table class="list price-table" id="vprods"><tr><th>Product</th><th>Vendor price $</th><th>Markup %</th><th>Your price $</th><th class="num">Customer pays</th><th>Min / days</th><th>For</th><th></th></tr>
+      ${v.products.map(prodRow).join('')}${prodRow(null)}</table></div>
+    <div id="vErr" class="error hidden"></div>
+    <div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+  const err = (e) => { $('vErr').textContent = e.message; $('vErr').classList.remove('hidden'); };
+  $('vSave').onclick = async () => { try { await api('/api/admin/vendors/' + id, 'PATCH', { status: $('vStatus').value, markupPercent: $('vMark').value, notes: $('vNotes').value }); await loadMarketplace(); vendorDialog(id); } catch (e) { err(e); } };
+  d.querySelectorAll('[data-psave]').forEach((b) => b.onclick = async () => {
+    const row = d.querySelector(`[data-prow="${b.dataset.psave}"]`);
+    const body = Object.fromEntries([...row.querySelectorAll('[data-k]')].map((i) => [i.dataset.k, i.type === 'checkbox' ? i.checked : i.value]));
+    try {
+      if (b.dataset.psave === 'new') await api(`/api/admin/vendors/${id}/products`, 'POST', body);
+      else await api(`/api/admin/vendors/${id}/products/${b.dataset.psave}`, 'PATCH', body);
+      await loadMarketplace(); vendorDialog(id);
+    } catch (e) { err(e); }
+  });
+  d.querySelectorAll('[data-pphoto]').forEach((inp) => inp.onchange = async () => {
+    try { await api(`/api/admin/products/${inp.dataset.pphoto}/photo`, 'POST', { dataUrl: await shrinkPhoto(inp.files[0]) }); vendorDialog(id); } catch (e) { err(e); }
+  });
+  if (!d.open) d.showModal();
+}
+
+function refresh() { return Promise.all([loadSponsors(), loadMarketplace(), loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadWaivers(), loadGifts(), loadReviews(), loadWaiverText(), loadEmails(), loadQbo(), loadFeed()]); }
 
 // ---------- Waivers ----------
 let wTimer;
@@ -477,7 +643,8 @@ async function loadChats() {
 let calMonth = new Date().toLocaleDateString('en-CA').slice(0, 7), calData, calSel = null;
 const shiftMonth = (m, n) => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1 + n, 1).toLocaleDateString('en-CA').slice(0, 7); };
 async function loadCalendar() {
-  calData = await api('/api/admin/calendar?month=' + calMonth);
+  calData = await api(`/api/admin/calendar?month=${calMonth}&location=${LOC}`);
+  CFG_DAYS = calData.partyDays;
   const [y, m] = calMonth.split('-').map(Number);
   $('calLabel').textContent = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const today = new Date().toLocaleDateString('en-CA');
@@ -500,12 +667,12 @@ async function loadCalendar() {
   if (calSel?.startsWith(calMonth)) showCalDay(); else $('calDay').classList.add('hidden');
 }
 let CFG_DAYS = [0, 5, 6];
-fetch('/api/config').then((r) => r.json()).then((c) => { CFG_DAYS = c.partyDays; loadCalendar(); });
+
 function showCalDay() {
   const parties = calData.parties.filter((p) => p.date === calSel);
   const blocks = calData.blocks.filter((b) => b.date === calSel);
   $('calDay').classList.remove('hidden');
-  $('calDayTitle').innerHTML = `${esc(fmtDate(calSel))} <a class="btn ghost small" href="/admin/runsheet?date=${calSel}" target="_blank" style="margin-left:8px">Run sheet</a>`;
+  $('calDayTitle').innerHTML = `${esc(fmtDate(calSel))} <a class="btn ghost small" href="/admin/runsheet?date=${calSel}&location=${LOC}" target="_blank" style="margin-left:8px">Run sheet</a>`;
   $('calDayList').innerHTML = (parties.length ? '<table class="list">' + parties.map((p) => `<tr class="click" data-id="${p.id}">
       <td>${esc(p.timeLabel)}–${esc(p.endLabel)}</td><td><b>${esc(p.child || '—')}</b><br><span class="muted">${esc(p.parent)} · ${p.kids} kids · ${esc(p.packageName)}</span></td>
       <td><span class="pill ${esc(p.status)}">${esc(p.status)}</span>${p.balanceCents > 0 ? `<br><span class="muted">${money(p.balanceCents)} owed</span>` : ''}</td></tr>`).join('') + '</table>' : '<p class="muted">No parties booked.</p>') +
@@ -518,7 +685,7 @@ $('calPrev').onclick = () => { calMonth = shiftMonth(calMonth, -1); loadCalendar
 $('calNext').onclick = () => { calMonth = shiftMonth(calMonth, 1); loadCalendar(); };
 $('blkAdd').onclick = async () => {
   try {
-    const r = await api('/api/admin/blocks', 'POST', { date: calSel, start: $('blkFrom').value || null, end: $('blkTo').value || null, reason: $('blkReason').value });
+    const r = await api('/api/admin/blocks', 'POST', { locationId: LOC, date: calSel, start: $('blkFrom').value || null, end: $('blkTo').value || null, reason: $('blkReason').value });
     $('blkFrom').value = $('blkTo').value = $('blkReason').value = '';
     await loadCalendar();
     if (r.clashes.length) { $('blkMsg').className = 'banner'; $('blkMsg').textContent = 'Heads up — already booked during that time: ' + r.clashes.join('; ') + '. Those parties are NOT cancelled.'; }
@@ -581,7 +748,7 @@ async function loadPricing() {
   document.querySelectorAll('#tab-pricing input:not([type=file]), #tab-pricing textarea').forEach((i) => i.oninput = i.onchange = () => onPriceEdit(i));
 }
 // Resize a phone photo to at most 1200px wide before uploading.
-function shrinkPhoto(file) {
+function shrinkPhoto(file, type = 'image/jpeg') {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -590,7 +757,7 @@ function shrinkPhoto(file) {
       c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(img.src);
-      resolve(c.toDataURL('image/jpeg', 0.84));
+      resolve(type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.84));
     };
     img.onerror = () => reject(new Error('That file could not be read as a photo.'));
     img.src = URL.createObjectURL(file);
@@ -676,14 +843,14 @@ async function loadQbo() {
 
 document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'waivers', 'gifts', 'reviews', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'waivers', 'gifts', 'reviews', 'sponsors', 'marketplace', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
   history.replaceState(null, '', '#' + t.dataset.tab);
 });
 const startTab = location.hash.slice(1);
 if (startTab) document.querySelector(`.tab[data-tab="${startTab}"]`)?.click();
 $('fFrom').value = new Date().toLocaleDateString('en-CA');
 $('fGo').onclick = loadBookings;
-refresh().catch((e) => document.querySelector('main').insertAdjacentHTML('afterbegin', `<p class="error">${esc(e.message)}</p>`));
+loadLocations().then(refresh).catch((e) => document.querySelector('main').insertAdjacentHTML('afterbegin', `<p class="error">${esc(e.message)}</p>`));
 </script>
 </body>
 </html>

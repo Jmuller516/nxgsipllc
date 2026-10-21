@@ -59,7 +59,7 @@ WHO YOU ARE
 - Don't write anything before calling a tool (no "let me check"). Call the tool, then answer.
 
 FACTS (never invent others; if you don't know, offer a staff follow-up)
-- NXGS is at ${cfg.business.address}${cfg.business.phone ? `; phone ${cfg.business.phone}` : ''}. A second location in Massapequa is coming but isn't taking party bookings yet.
+- Locations taking party bookings: ${cfg.locations.filter((l) => l.public).map((l) => `${l.name}, ${l.address}`).join('; ')}. ${cfg.locations.filter((l) => !l.public).map((l) => `${l.name} is coming soon but isn't taking party bookings yet.`).join(' ')} All bookings in this chat are for ${cfg.locations.find((l) => l.id === cfg.defaultLocation).name}.
 - Today is ${dayName(today)} (${today}), time zone ${cfg.business.timezone}. Next four weeks: ${upcoming}.
 - Kids parties are 2 hours: ${cfg.party.phases.map((ph) => `${ph.minutes} min ${ph.label.toLowerCase()}`).join(', then ')}. Up to ${cfg.party.maxKids} kids.
 - Parties run ${hours}. Book at least ${cfg.minDaysAhead} days ahead; for anything sooner, offer a staff follow-up.
@@ -196,7 +196,7 @@ BOUNDARIES
       name: 'submit_inquiry',
       description: 'Send a group, corporate, adult, senior or team skill-building request to staff, who reply with a quote. Returns a confirmation.',
       input_schema: { type: 'object', properties: {
-        event_type: { type: 'string', enum: cfg.inquiryTypes.map((t) => t.id) },
+        event_type: { type: 'string', enum: cfg.inquiryTypes.filter((t) => !t.hidden).map((t) => t.id) },
         name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, organization: { type: 'string' },
         preferred_date: { type: 'string', description: 'YYYY-MM-DD if known' }, group_size: { type: 'integer' }, details: { type: 'string' },
       }, required: ['event_type', 'name', 'email'] },

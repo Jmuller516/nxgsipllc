@@ -61,6 +61,7 @@ function render() {
 
     <div class="card">
       <dl class="facts" style="margin-top:0">
+        <dt>Where</dt><dd>${esc(B.location.name)}<br><span class="muted" style="font-weight:400">${esc(B.location.address)}</span></dd>
         <dt>Date</dt><dd>${esc(fmtDate(B.partyDate))}</dd>
         <dt>Time</dt><dd>${esc(B.timeLabel)} – ${esc(B.endLabel)}</dd>
         <dt>Package</dt><dd>${esc(B.packageName)}</dd>

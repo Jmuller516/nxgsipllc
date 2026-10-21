@@ -160,7 +160,8 @@ function createGuests(db, svc, opts = {}) {
       endLabel: b.endLabel,
       theme: b.themeInfo,
       schedule: b.schedule,
-      place: { name: cfg.business.name, address: cfg.business.address, phone: cfg.business.phone },
+      locationId: b.location_id,
+      place: { name: b.location.name, address: b.location.address, phone: b.location.phone || cfg.business.phone },
       waiver: waiverText(),
     };
   }

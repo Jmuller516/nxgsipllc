@@ -11,6 +11,7 @@
 <main id="app"><p class="muted">Loading invitation…</p></main>
 
 <script src="/static/waiver.js"></script>
+<script src="/static/sponsors.js"></script>
 <script>
 const TOKEN = "__INVITE_TOKEN__";
 const $ = (id) => document.getElementById(id);
@@ -77,7 +78,9 @@ async function load() {
         <div class="actions"><button class="btn" type="submit">Send RSVP</button></div>
       </form>
     </div>
-    <div class="card hidden" id="waiverCard"></div>` : ''}`;
+    <div class="card hidden" id="waiverCard"></div>` : ''}
+    <div id="sponsorBox" class="foot"></div>`;
+  NXSponsors.mount($('sponsorBox'), 'invite', INV.locationId);
   if ($('rsvp')) $('rsvp').onsubmit = submitRsvp;
 }
 

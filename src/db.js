@@ -210,6 +210,83 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
     );
   `);
 
+  db.exec(`
+    -- Sponsors and where their logo appears.
+    CREATE TABLE IF NOT EXISTS sponsors (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL,
+      website         TEXT,
+      logo            TEXT,                      -- media path
+      tagline         TEXT,
+      package_id      TEXT,
+      placements      TEXT NOT NULL DEFAULT '[]', -- JSON array
+      location_id     TEXT,                      -- null = all locations
+      starts_on       TEXT,
+      ends_on         TEXT,
+      contract_cents  INTEGER NOT NULL DEFAULT 0,
+      billing         TEXT,                      -- e.g. monthly, one-time
+      status          TEXT NOT NULL DEFAULT 'active', -- active | paused | ended
+      contact_name    TEXT,
+      contact_email   TEXT,
+      contact_phone   TEXT,
+      notes           TEXT,
+      impressions     INTEGER NOT NULL DEFAULT 0,
+      clicks          INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Outside vendors who sell products through NXGS.
+    CREATE TABLE IF NOT EXISTS vendors (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_name   TEXT NOT NULL,
+      contact_name    TEXT NOT NULL,
+      email           TEXT NOT NULL,
+      phone           TEXT,
+      website         TEXT,
+      category        TEXT,
+      description     TEXT,
+      audiences       TEXT NOT NULL DEFAULT '["birthday"]', -- birthday, corporate
+      status          TEXT NOT NULL DEFAULT 'applied',    -- applied | approved | rejected | paused
+      markup_percent  REAL,                                -- null = marketplace default
+      insured         INTEGER NOT NULL DEFAULT 0,          -- vendor says they carry liability insurance
+      notes           TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      approved_at     TEXT
+    );
+    CREATE TABLE IF NOT EXISTS vendor_products (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_id       INTEGER NOT NULL REFERENCES vendors(id),
+      name            TEXT NOT NULL,
+      detail          TEXT,
+      includes        TEXT,
+      unit            TEXT NOT NULL DEFAULT 'each',
+      cost_cents      INTEGER NOT NULL,          -- what NXGS pays the vendor
+      markup_percent  REAL,                      -- null = vendor/marketplace default
+      price_cents     INTEGER,                   -- set to override the calculated price
+      min_qty         INTEGER NOT NULL DEFAULT 1,
+      max_qty         INTEGER,
+      lead_days       INTEGER NOT NULL DEFAULT 7,
+      audience        TEXT NOT NULL DEFAULT 'birthday', -- birthday | corporate | both
+      photo           TEXT,
+      active          INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS vendor_orders (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      booking_id      INTEGER NOT NULL REFERENCES bookings(id),
+      vendor_id       INTEGER NOT NULL REFERENCES vendors(id),
+      product_id      INTEGER NOT NULL REFERENCES vendor_products(id),
+      product_name    TEXT NOT NULL,
+      qty             INTEGER NOT NULL,
+      unit_cost_cents INTEGER NOT NULL,
+      unit_price_cents INTEGER NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'new', -- new | confirmed | delivered | paid_out | cancelled
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      paid_out_at     TEXT,
+      UNIQUE (booking_id, product_id)
+    );
+  `);
+
   // Upgrades for databases created by earlier versions.
   addColumn(db, 'bookings', 'theme', 'TEXT');
   addColumn(db, 'bookings', 'host_name', 'TEXT');
@@ -219,6 +296,8 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
   addColumn(db, 'bookings', 'referral_code', 'TEXT');
   addColumn(db, 'bookings', 'referred_by', 'INTEGER');
   addColumn(db, 'emails', 'channel', "TEXT NOT NULL DEFAULT 'email'");
+  addColumn(db, 'bookings', 'location_id', "TEXT NOT NULL DEFAULT 'farmingdale'");
+  addColumn(db, 'blocks', 'location_id', "TEXT NOT NULL DEFAULT 'farmingdale'");
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_invite ON bookings(invite_token)');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_referral ON bookings(referral_code)');
   return db;

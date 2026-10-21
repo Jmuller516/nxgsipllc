@@ -16,6 +16,8 @@
     <figcaption>Rendering · NXGS Farmingdale</figcaption>
   </figure>
   <h1>Book your event</h1>
+  <div id="locBox"></div>
+  <div id="sponsorBox"></div>
   <p class="muted"><a href="/calendar" id="calLink">See the availability calendar →</a></p>
   <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
   <p id="cancelBanner" class="banner hidden">Payment was cancelled. Your time is held briefly; you can try again below.</p>
@@ -111,6 +113,7 @@
         <div><label for="iSize">Group size</label><input id="iSize" type="number" min="1" inputmode="numeric"></div>
       </div>
       <label for="iMsg">Details</label><textarea id="iMsg" rows="4"></textarea>
+      <div id="corpPartners" class="hidden"><label>Add partner products to your quote <span class="muted">(optional)</span></label><div id="corpList"></div></div>
       <div id="inquiryError" class="error hidden" role="alert"></div>
       <div class="actions"><button class="btn" type="submit">Send request</button></div>
     </div>
@@ -125,10 +128,11 @@
   <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0">Thanks — we got it!</h2><p>We'll reach out within one business day.</p></div>
 </main>
 
+<script src="/static/sponsors.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const money = (c) => '$' + (c / 100).toFixed(2);
-let CFG, selectedTime = null, quoteTimer;
+let CFG, selectedTime = null, quoteTimer, LOCATION = null;
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
@@ -144,6 +148,17 @@ const incList = (t) => String(t || '').split('\n').filter((x) => x.trim()).map((
 async function init() {
   CFG = await api('/api/config');
   $('bizName').textContent = CFG.business.name;
+  // Location: a picker only when more than one location takes bookings.
+  const qLoc = new URLSearchParams(location.search).get('location');
+  LOCATION = qLoc && CFG.locations.some((l) => l.id === qLoc) ? qLoc : CFG.defaultLocation;
+  const locBox = $('locBox');
+  if (CFG.locations.length > 1) {
+    locBox.innerHTML = '<label for="locSel" style="margin-top:0">Location</label><select id="locSel">' + CFG.locations.map((l) => `<option value="${l.id}" ${l.id === LOCATION ? 'selected' : ''}>${l.name} · ${l.address}</option>`).join('') + '</select>';
+    $('locSel').onchange = () => { LOCATION = $('locSel').value; onLocationChange(); };
+  } else {
+    const l = CFG.locations[0];
+    locBox.innerHTML = `<p class="muted" style="margin:0 0 12px">📍 ${l.name} · ${l.address}</p>`;
+  }
   const params = new URLSearchParams(location.search);
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
   if (params.get('embed')) { document.body.classList.add('embedded'); $('calLink').href = '/calendar?embed=1'; }
@@ -192,11 +207,18 @@ async function init() {
   const max = new Date(today); max.setDate(max.getDate() + CFG.maxDaysAhead);
   $('date').min = ymdLocal(min); $('date').max = ymdLocal(max);
   const dayNames = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-  $('daysHint').textContent = 'Parties run ' + CFG.partyDays.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
+  NXSponsors.mount($('sponsorBox'), 'booking', LOCATION);
+  window.onLocationChange = () => { const ld = CFG.locations.find((l) => l.id === LOCATION).partyDays; $('daysHint').textContent = 'Parties run ' + ld.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'; loadSlots(); scheduleQuote(); };
+  $('daysHint').textContent = 'Parties run ' + CFG.locations.find((l) => l.id === LOCATION).partyDays.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
   const mins = CFG.party.phases.reduce((s, p) => s + p.minutes, 0);
   $('lengthHint').textContent = `(${mins / 60} hours: ` + CFG.party.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
   $('policy').textContent = `A ${CFG.payments.depositPercent}% non-refundable deposit reserves your party. The balance is due ${CFG.payments.balanceDueDaysBefore} days before. Parties booked within ${CFG.payments.balanceDueDaysBefore} days are paid in full.`;
 
+  fetch('/api/partners/corporate').then((r) => r.json()).then((list) => {
+    if (!list.length) return;
+    $('corpList').innerHTML = list.map((p) => `<label class="check" style="margin:6px 0"><input type="checkbox" data-corp="${escH(p.name)} (${escH(p.vendor)})"> ${escH(p.name)} <span class="muted">· ${money(p.priceCents)} ${p.unit === 'each' ? 'each' : '/ ' + escH(p.unit)} · ${escH(p.vendor)}</span></label>`).join('');
+    $('corpPartners').classList.remove('hidden');
+  }).catch(() => {});
   $('eventType').innerHTML = CFG.inquiryTypes.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
 
   document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
@@ -230,7 +252,7 @@ async function loadSlots() {
   $('slotsWrap').classList.add('hidden'); $('slotsMsg').textContent = '';
   if (!date) return;
   try {
-    const res = await api('/api/availability?date=' + date);
+    const res = await api(`/api/availability?date=${date}&location=${LOCATION}`);
     if (!res.open) { $('slotsMsg').textContent = "We don't run parties that day — please pick another date."; return; }
     if (!res.slots.some((s) => s.available)) { $('slotsMsg').textContent = 'That day is fully booked. Please try another date.'; }
     $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="Taken"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
@@ -250,7 +272,7 @@ function formData() {
     kids: Number($('kids').value), partyDate: $('date').value, time: selectedTime, addOns,
     childName: $('childName').value, childAge: $('childAge').value, parentName: $('parentName').value,
     email: $('email').value, phone: $('phone').value, notes: $('notes').value,
-    theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
+    locationId: LOCATION, theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
   };
 }
 
@@ -332,7 +354,8 @@ async function submitInquiry(e) {
   try {
     await api('/api/leads', {
       eventType: $('eventType').value, name: $('iName').value, organization: $('iOrg').value, email: $('iEmail').value,
-      phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value, message: $('iMsg').value,
+      phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value,
+      message: [$('iMsg').value, ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`)].filter(Boolean).join('\n'),
     });
     $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');
   } catch (err) { $('inquiryError').textContent = err.message; $('inquiryError').classList.remove('hidden'); }

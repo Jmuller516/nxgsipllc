@@ -27,6 +27,7 @@
 <main>
   <div class="noprint toolbar" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
     <div><label for="day">Day</label><input id="day" type="date"></div>
+    <div><label for="where">Location</label><select id="where"></select></div>
     <button class="btn" id="print">Print</button>
     <a class="btn ghost" href="/admin">Back to admin</a>
   </div>
@@ -39,15 +40,21 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const q = new URLSearchParams(location.search);
 $('day').value = q.get('date') || new Date().toLocaleDateString('en-CA');
 $('day').onchange = load;
+$('where').onchange = load;
 $('print').onclick = () => window.print();
 
 async function load() {
-  const r = await fetch('/api/admin/runsheet?date=' + $('day').value);
+  if (!$('where').options.length) {
+    const locs = await (await fetch('/api/admin/locations')).json();
+    $('where').innerHTML = locs.map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+    $('where').value = q.get('location') || locs[0].id;
+  }
+  const r = await fetch(`/api/admin/runsheet?date=${$('day').value}&location=${$('where').value}`);
   const d = await r.json();
   if (!r.ok) { $('out').innerHTML = `<p class="error">${esc(d.error)}</p>`; return; }
   const day = new Date(d.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   $('out').innerHTML = `
-    <p class="eyebrow">NXGS · Run sheet</p>
+    <p class="eyebrow">${esc(d.location.name)} · Run sheet</p>
     <h1>${esc(day)}</h1>
     <p>${d.parties.length} part${d.parties.length === 1 ? 'y' : 'ies'}${d.closures.length ? ` · Closures: ${esc(d.closures.join(', '))}` : ''}</p>
     ${Object.keys(d.deliveries).length ? `<div class="card" style="margin-bottom:14px"><h2 style="margin-top:0">Deliveries & orders today</h2>${Object.entries(d.deliveries).map(([v, items]) => `<p><b>${esc(v)}</b><br>${items.map(esc).join('<br>')}</p>`).join('')}</div>` : ''}

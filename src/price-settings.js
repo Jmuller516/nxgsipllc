@@ -99,7 +99,7 @@ function reset(db, cfg = config) {
 function view(cfg = config) {
   return {
     packages: cfg.packages.map((p) => ({ ...p, startingPriceCents: defaults.packages.find((d) => d.id === p.id)?.priceCents })),
-    addOns: cfg.addOns.map((a) => ({ ...a, startingPriceCents: defaults.addOns.find((d) => d.id === a.id)?.priceCents })),
+    addOns: cfg.addOns.filter((a) => !a.marketplace).map((a) => ({ ...a, startingPriceCents: defaults.addOns.find((d) => d.id === a.id)?.priceCents })),
     addOnCategories: cfg.addOnCategories,
     party: { depositPercent: cfg.payments.depositPercent, balanceDueDaysBefore: cfg.payments.balanceDueDaysBefore, taxRatePercent: +(cfg.tax.rate * 100).toFixed(4) },
   };

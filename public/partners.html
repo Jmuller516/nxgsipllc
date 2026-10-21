@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Partner with NXGS</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .pkgs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 10px 0 6px; }
+    .pkg-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--bg); }
+    .pkg-card h3 { margin: 0 0 4px; font-size: 1rem; }
+    .pkg-card p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .prod { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--bg); }
+    .prod-head { display: flex; justify-content: space-between; align-items: center; }
+    .prod-head b { font-size: .9rem; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px) { .row3 { grid-template-columns: 1fr 1fr; } }
+    .steps-list { margin: 8px 0 0; padding-left: 20px; }
+    .steps-list li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <figure class="hero"><img src="/static/img/courts.jpg" alt="NXGS indoor courts"><figcaption>Rendering · NXGS Farmingdale</figcaption></figure>
+  <p class="eyebrow">Next Generation Sports Complex</p>
+  <h1>Partner with NXGS</h1>
+  <p class="muted">Hundreds of birthday parties, team events and corporate outings a year on Long Island. Put your brand or your products in front of those families and companies.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="vendor">Sell your products</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="sponsor">Become a sponsor</button>
+  </div>
+
+  <!-- ============ VENDORS ============ -->
+  <section id="vendor">
+    <div class="card">
+      <h2 style="margin-top:0">Offer your products at our parties and events</h2>
+      <p>Party favors, treats, decorations, apparel, entertainment, corporate gifts: if families or companies would want it at their event, we’d like to hear from you.</p>
+      <ol class="steps-list">
+        <li>Apply below with your products and <b>your price to us</b>.</li>
+        <li>Once approved, your products appear as add-ons when families book, with photos and descriptions.</li>
+        <li>When a family pays, you get an order email with quantities, personalization and the delivery time.</li>
+        <li>We handle the customer and the payment, and pay you <span id="terms">after the party</span>.</li>
+      </ol>
+    </div>
+    <form id="vendorForm" class="card" novalidate>
+      <h2 style="margin-top:0">Your business</h2>
+      <div class="row">
+        <div><label for="vBiz">Business name</label><input id="vBiz" autocomplete="organization"></div>
+        <div><label for="vCat">Category</label><select id="vCat">
+          <option>Party favors</option><option>Food & treats</option><option>Decorations & balloons</option><option>Apparel & sports gear</option>
+          <option>Entertainment</option><option>Photo & video</option><option>Corporate gifts</option><option>Other</option></select></div>
+      </div>
+      <div class="row">
+        <div><label for="vName">Your name</label><input id="vName" autocomplete="name"></div>
+        <div><label for="vEmail">Email</label><input id="vEmail" type="email" autocomplete="email"></div>
+      </div>
+      <div class="row">
+        <div><label for="vPhone">Phone</label><input id="vPhone" type="tel" autocomplete="tel"></div>
+        <div><label for="vWeb">Website or Instagram <span class="muted">(optional)</span></label><input id="vWeb"></div>
+      </div>
+      <label>Who are your products for?</label>
+      <label class="check" style="margin:4px 0"><input type="checkbox" id="aBday" checked> Kids birthday parties</label>
+      <label class="check" style="margin:4px 0"><input type="checkbox" id="aCorp"> Corporate & group events</label>
+      <label for="vDesc">Tell us about your business</label><textarea id="vDesc" rows="3"></textarea>
+      <label class="check"><input type="checkbox" id="vIns"> My business carries general liability insurance</label>
+
+      <h2>Products to offer</h2>
+      <p class="muted">Enter <b>your price to NXGS</b> (what we pay you). We set the price families see.</p>
+      <div id="prods"></div>
+      <button class="btn ghost small" type="button" id="addProd">+ Add another product</button>
+      <div id="vErr" class="error hidden"></div>
+      <div class="actions"><button class="btn" type="submit">Send application</button></div>
+    </form>
+    <div id="vDone" class="card hidden"><h2 style="margin-top:0">Thanks, we got your application!</h2><p>We’ll review it and get back to you by email.</p></div>
+  </section>
+
+  <!-- ============ SPONSORS ============ -->
+  <section id="sponsor" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Sponsorship opportunities</h2>
+      <p>Reach local families at the moments they’re celebrating, online and in the building.</p>
+      <div class="pkgs" id="pkgs"></div>
+    </div>
+    <form id="sponsorForm" class="card" novalidate>
+      <h2 style="margin-top:0">Let’s talk</h2>
+      <div class="row">
+        <div><label for="sName">Your name</label><input id="sName" autocomplete="name"></div>
+        <div><label for="sOrg">Company</label><input id="sOrg" autocomplete="organization"></div>
+      </div>
+      <div class="row">
+        <div><label for="sEmail">Email</label><input id="sEmail" type="email" autocomplete="email"></div>
+        <div><label for="sPhone">Phone <span class="muted">(optional)</span></label><input id="sPhone" type="tel" autocomplete="tel"></div>
+      </div>
+      <label for="sPkg">Interested in</label><select id="sPkg"><option value="">Not sure yet</option></select>
+      <label for="sMsg">Anything else? <span class="muted">(budget, timing, goals)</span></label><textarea id="sMsg" rows="3"></textarea>
+      <div id="sErr" class="error hidden"></div>
+      <div class="actions"><button class="btn" type="submit">Send</button></div>
+    </form>
+    <div id="sDone" class="card hidden"><h2 style="margin-top:0">Thanks!</h2><p>Our partnerships team will reach out shortly.</p></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const q = new URLSearchParams(location.search);
+if (q.get('embed')) document.body.classList.add('embedded');
+
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+  $('vendor').classList.toggle('hidden', t.dataset.tab !== 'vendor');
+  $('sponsor').classList.toggle('hidden', t.dataset.tab !== 'sponsor');
+});
+if (q.get('tab') === 'sponsor') document.querySelector('[data-tab=sponsor]').click();
+
+let n = 0;
+function addProduct() {
+  n++;
+  const d = document.createElement('div');
+  d.className = 'prod';
+  d.innerHTML = `<div class="prod-head"><b>Product ${n}</b>${n > 1 ? '<button type="button" class="btn ghost small" data-rm>Remove</button>' : ''}</div>
+    <label>Product name</label><input data-f="name" placeholder="e.g. Personalized cookie favors">
+    <label>Short description</label><input data-f="description" placeholder="e.g. 2 decorated sugar cookies in a bag with ribbon">
+    <div class="row3">
+      <div><label>Your price ($)</label><input data-f="price" type="number" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label>Per</label><select data-f="unit"><option>each</option><option>dozen</option><option>set</option><option>party</option><option>hour</option></select></div>
+      <div><label>Minimum order</label><input data-f="minQty" type="number" min="1" value="1" inputmode="numeric"></div>
+      <div><label>Days notice needed</label><input data-f="leadDays" type="number" min="0" value="7" inputmode="numeric"></div>
+    </div>`;
+  const rm = d.querySelector('[data-rm]');
+  if (rm) rm.onclick = () => d.remove();
+  $('prods').appendChild(d);
+}
+addProduct();
+$('addProd').onclick = addProduct;
+
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+  return d;
+}
+
+$('vendorForm').onsubmit = async (e) => {
+  e.preventDefault();
+  $('vErr').classList.add('hidden');
+  const products = [...document.querySelectorAll('.prod')].map((p) => Object.fromEntries([...p.querySelectorAll('[data-f]')].map((i) => [i.dataset.f, i.value])));
+  try {
+    await post('/api/partners/vendor', {
+      businessName: $('vBiz').value, category: $('vCat').value, contactName: $('vName').value, email: $('vEmail').value, phone: $('vPhone').value,
+      website: $('vWeb').value, description: $('vDesc').value, insured: $('vIns').checked,
+      audiences: [$('aBday').checked && 'birthday', $('aCorp').checked && 'corporate'].filter(Boolean), products,
+    });
+    $('vendorForm').classList.add('hidden'); $('vDone').classList.remove('hidden'); $('vDone').scrollIntoView({ block: 'start' });
+  } catch (err) { $('vErr').textContent = err.message; $('vErr').classList.remove('hidden'); }
+};
+
+$('sponsorForm').onsubmit = async (e) => {
+  e.preventDefault();
+  $('sErr').classList.add('hidden');
+  try {
+    await post('/api/partners/sponsor', { name: $('sName').value, organization: $('sOrg').value, email: $('sEmail').value, phone: $('sPhone').value, packageId: $('sPkg').value, message: $('sMsg').value });
+    $('sponsorForm').classList.add('hidden'); $('sDone').classList.remove('hidden'); $('sDone').scrollIntoView({ block: 'start' });
+  } catch (err) { $('sErr').textContent = err.message; $('sErr').classList.remove('hidden'); }
+};
+
+fetch('/api/config').then((r) => r.json()).then((c) => {
+  if (c.marketplace?.payoutTerms) $('terms').textContent = `on ${c.marketplace.payoutTerms.toLowerCase()} terms`;
+  $('pkgs').innerHTML = c.sponsorPackages.map((p) => `<div class="pkg-card"><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p></div>`).join('');
+  $('sPkg').innerHTML += c.sponsorPackages.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+});
+</script>
+</body>
+</html>

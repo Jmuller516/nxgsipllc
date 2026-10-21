@@ -60,6 +60,7 @@ function createNotifier(db, svc, opts = {}) {
   const sender = opts.sender || (process.env.RESEND_API_KEY ? resendSend : null);
   const smsSender = opts.smsSender || (twilioReady() ? twilioSend : null);
   const guests = opts.guests || null;
+  const sponsors = opts.sponsors || null;
   const biz = cfg.business;
 
   const customerLink = (b) => `${baseUrl()}/booking/${b.ref}?t=${b.token}`;
@@ -70,6 +71,8 @@ function createNotifier(db, svc, opts = {}) {
     const c = cfg.brand.primaryColor;
     const logo = cfg.brand.logoUrl ? `<img src="${esc(cfg.brand.logoUrl)}" alt="${esc(biz.name)}" style="max-height:48px;margin-bottom:12px">` : `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5b6676">${esc(biz.name)}</div>`;
     const btn = button ? `<p style="margin:24px 0"><a href="${esc(button.url)}" style="background:${c};color:#fff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;display:inline-block">${esc(button.label)}</a></p>` : '';
+    const sp = sponsors ? sponsors.forPlacement('email', null, { count: true }) : [];
+    const spLine = sp.length ? `<p style="font-size:12px;color:#5b6676;text-align:center;margin:12px 0 0">Parties presented by ${sp.map((x) => x.hasLink ? `<a href="${esc(baseUrl())}/s/${x.id}" style="color:#5b6676">${esc(x.name)}</a>` : esc(x.name)).join(' · ')}</p>` : '';
     return `<!doctype html><html><body style="margin:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#0f1b2d">
       <div style="max-width:560px;margin:0 auto;padding:24px 16px">
         <div style="background:#fff;border:1px solid #dfe4eb;border-radius:12px;padding:24px">
@@ -78,6 +81,7 @@ function createNotifier(db, svc, opts = {}) {
           ${bodyHtml}
           ${btn}
         </div>
+        ${spLine}
         <p style="font-size:12px;color:#5b6676;text-align:center;margin-top:16px">${esc(biz.name)} · <a href="${esc(biz.website)}" style="color:#5b6676">${esc(biz.website.replace(/^https?:\/\//, ''))}</a> · Reply to this email with any questions.</p>
       </div></body></html>`;
   }
@@ -180,6 +184,40 @@ function createNotifier(db, svc, opts = {}) {
         <p>Preferred date: ${esc(lead.preferred_date || '—')} · Group size: ${esc(lead.group_size || '—')}</p>${lead.message ? `<p>${esc(lead.message)}</p>` : ''}`, { label: 'Open leads', url: `${baseUrl()}/admin` }),
       text: `New lead: ${type}\n${lead.name} ${lead.organization || ''}\n${lead.email} ${lead.phone || ''}\nDate: ${lead.preferred_date || '-'} · Size: ${lead.group_size || '-'}\n${lead.message || ''}`,
     });
+  }
+
+  // ---------- outside vendors ----------
+  function onVendorOrder(vendor, orders, booking) {
+    const b = svc.get(booking.id);
+    const due = (b.start_min - 60);
+    const dueLabel = `${Math.floor(due / 60) % 12 || 12}:${String(due % 60).padStart(2, '0')} ${due >= 720 ? 'PM' : 'AM'}`;
+    const total = orders.reduce((s, o) => s + o.unit_cost_cents * o.qty, 0);
+    const rows = orders.map((o) => `<tr><td style="padding:6px 0">${esc(o.product_name)}</td><td style="padding:6px 0;text-align:center">${o.qty}</td><td style="padding:6px 0;text-align:right">${money(o.unit_cost_cents)}</td><td style="padding:6px 0;text-align:right">${money(o.unit_cost_cents * o.qty)}</td></tr>`).join('');
+    const personal = [b.child_name ? `Birthday child: ${b.child_name}${b.child_age ? ` (turning ${b.child_age})` : ''}` : '', b.themeInfo ? `Theme: ${b.themeInfo.name}` : '', b.details?.jerseyNumber ? `Jersey #: ${b.details.jerseyNumber}` : ''].filter(Boolean);
+    queue({ kind: 'vendor_order', to: vendor.email, bookingId: b.id, dedupeKey: `vendor_order:${b.id}:${vendor.id}:${orders.map((o) => o.id).join('-')}`,
+      subject: `New NXGS order for ${fmtDate(b.party_date)} (${b.ref})`,
+      html: wrap(`New order from ${biz.shortName}`, `<p>Hi ${esc(vendor.contact_name)}, a party at ${esc(b.location.name)} includes your products:</p>
+        <table style="border-collapse:collapse;width:100%;margin:12px 0"><tr style="color:#5b6676;font-size:12px"><td>Item</td><td style="text-align:center">Qty</td><td style="text-align:right">Your price</td><td style="text-align:right">Total</td></tr>${rows}
+        <tr><td colspan="3" style="padding:6px 0;font-weight:700;border-top:1px solid #dfe4eb">Total NXGS pays you</td><td style="padding:6px 0;text-align:right;font-weight:700;border-top:1px solid #dfe4eb">${money(total)}</td></tr></table>
+        <p><b>Deliver to:</b> ${esc(b.location.name)}, ${esc(b.location.address)}<br><b>By:</b> ${esc(fmtDate(b.party_date))} at ${esc(dueLabel)} (1 hour before the party)</p>
+        ${personal.length ? `<p><b>Personalization:</b><br>${personal.map(esc).join('<br>')}</p>` : ''}
+        <p style="color:#5b6676;font-size:13px">Payment terms: ${esc(cfg.marketplace.payoutTerms)}. Please reply to confirm.</p>`),
+      text: `New NXGS order for ${fmtDate(b.party_date)} (${b.ref})\n${orders.map((o) => `${o.product_name} x${o.qty} @ ${money(o.unit_cost_cents)}`).join('\n')}\nTotal: ${money(total)}\nDeliver to ${b.location.name}, ${b.location.address} by ${dueLabel}\n${personal.join('\n')}` });
+    toStaff({ kind: 'staff_vendor_order', bookingId: b.id, dedupeKey: `staff_vendor_order:${b.id}:${vendor.id}:${orders.map((o) => o.id).join('-')}`,
+      subject: `Partner order: ${vendor.business_name} for ${b.ref}`,
+      html: wrap('Partner order sent', `<p>${esc(vendor.business_name)} was sent an order for ${esc(b.child_name || b.parent_name)}'s party on ${esc(fmtDate(b.party_date))}: ${orders.map((o) => `${esc(o.product_name)} × ${o.qty}`).join(', ')}. NXGS owes ${money(total)}.</p>`),
+      text: `${vendor.business_name}: ${orders.map((o) => `${o.product_name} x${o.qty}`).join(', ')} for ${b.ref}. Owed ${money(total)}.` });
+  }
+
+  function onVendorApplied(vendor) {
+    queue({ kind: 'vendor_applied', to: vendor.email, dedupeKey: `vendor_applied:${vendor.id}`,
+      subject: `We got your application — ${biz.name}`,
+      html: wrap('Thanks for applying!', `<p>Hi ${esc(vendor.contact_name)}, thanks for your interest in offering ${esc(vendor.business_name)} products at ${esc(biz.name)} parties and events. Our team will review your application and get back to you.</p>`),
+      text: `Thanks for applying to sell at ${biz.name} events. We'll review your application and get back to you.` });
+    toStaff({ kind: 'staff_vendor_applied', dedupeKey: `staff_vendor_applied:${vendor.id}`,
+      subject: `New vendor application: ${vendor.business_name}`,
+      html: wrap('New vendor application', `<p><b>${esc(vendor.business_name)}</b> (${esc(vendor.category || 'no category')})<br>${esc(vendor.contact_name)} · ${esc(vendor.email)}${vendor.phone ? ` · ${esc(vendor.phone)}` : ''}</p>${vendor.description ? `<p>${esc(vendor.description)}</p>` : ''}<p>Products: ${vendor.products.map((p) => `${esc(p.name)} (${money(p.cost_cents)})`).join(', ')}</p>`, { label: 'Review in Admin', url: `${baseUrl()}/admin#marketplace` }),
+      text: `New vendor application: ${vendor.business_name} — ${vendor.contact_name}, ${vendor.email}` });
   }
 
   // ---------- gift cards & referral credits ----------
@@ -352,7 +390,7 @@ function createNotifier(db, svc, opts = {}) {
     return true;
   }
 
-  return { onPayment, onLead, onGiftActivated, onReferralCredit, queueReminders, flush, tick, list, get, resend, enabled: !!sender, smsEnabled: !!smsSender };
+  return { onPayment, onLead, onGiftActivated, onReferralCredit, onVendorOrder, onVendorApplied, queueReminders, flush, tick, list, get, resend, enabled: !!sender, smsEnabled: !!smsSender };
 }
 
 module.exports = { createNotifier, resendSend, twilioSend, toE164 };

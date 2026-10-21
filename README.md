@@ -4,6 +4,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 
 ## What it does
 
+**Two locations**: NXGS Farmingdale (388 Broad Hollow Rd, Farmingdale, NY 11735) takes bookings now. NXGS Massapequa (400 Carman Mill Rd, Massapequa, NY 11758) is set up for staff only, so customers don't see it yet. Each location has its own calendar, hours, closures, run sheets and reports. Switch locations at the top of the admin page. To open Massapequa to customers, set `public: true` on it in `src/config.js` (`locations`), and a location picker appears on the booking page and calendar.
+
 **For customers**
 - **Live availability calendar** (`/calendar`): a month view showing which days are Open, Few left, Booked or Closed. It updates automatically every 30 seconds. Customers tap a day to see open start times, and tapping a time opens the booking form with the date and time filled in. They never see who booked.
 
@@ -17,6 +19,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - **Review** the day after the party.
 
 **Waivers** (`/waiver`): a liability waiver with a finger-drawn signature, valid for a year per child. Guests sign from the invitation. Walk-ins sign on a front-desk tablet at `/waiver`. ⚠️ The waiver text is a **sample** until you paste in your attorney's or insurer's version (Admin → Settings).
+
+**Partners page** (`/partners`): vendors apply to sell at parties and events, and companies ask about sponsorships. Sponsor inquiries land in Leads.
 
 **Gift cards** (`/gift-cards`): buy online, delivered by email, with a balance check.
 
@@ -48,6 +52,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - **Waivers tab**: search signed waivers and view each one with its signature.
 - **Gift cards tab**: every gift card and referral credit with its balance. Issue a card yourself (for example as an apology or a raffle prize) or void one.
 - **Reviews tab**: approve which reviews may appear on the website. Only reviews the parent allowed can be shown.
+- **Sponsors tab**: add sponsors, upload logos, choose where each logo appears (booking page, calendar, invitations, customer emails) and for which location, set the dates and contract value, and see logo views, clicks and click rate to show sponsors what they're getting. Logos appear only while a sponsor is active and within its dates.
+- **Marketplace tab**: outside vendors apply at `/partners` with their products and **their price to NXGS**. You approve them and set your markup (35% by default, or per vendor, or per product, or type an exact price). Live products appear on the booking page under "From our partners", or on the corporate request form. When a family pays, the vendor automatically gets an order email with quantities, personalization and the delivery time (without the family's contact details). You track what you owe each vendor and mark it paid out. The tiles show partner sales, NXGS margin and amount owed.
 - **Chats tab**: every chat conversation, with which ones turned into bookings or leads.
 - **Messages tab** (emails and texts): every email sent (or that would be sent), with a preview and a resend button. Staff get alerts for new parties, new leads and overdue balances.
 - **Settings tab**: connect QuickBooks Online. Every payment (Stripe or desk) becomes a Sales Receipt under the customer.
@@ -67,7 +73,7 @@ You need **Node.js 22.13 or newer**. There are no other dependencies, so you don
 
 ```bash
 npm run demo     # admin password "demo", payments simulated
-npm test         # 40 automated tests
+npm test         # 44 automated tests
 node tools/build-preview.js   # one-file clickable preview (preview.html)
 ```
 
@@ -107,6 +113,12 @@ Then open http://localhost:3000/book and http://localhost:3000/admin.
 The assistant's name, and the model it uses, are in `src/config.js` under `assistant`. It always uses the live prices, add-ons, hours and availability, so price changes on the Pricing tab apply to the chat right away. Built-in limits: 1,000 characters per message, 60 messages per conversation, 40 messages per visitor every 10 minutes, and 3 bookings per conversation. Unpaid chat bookings release their time after 30 minutes, the same as the form.
 
 To put the chat on nxgs.net by itself, add `<script src="https://book.nxgs.net/static/chat.js" defer></script>`, or use the embed with `data-page="chat"`.
+
+## Before taking on vendors and sponsors
+
+- Have a short **vendor agreement**: pricing, delivery, quality, food-safety rules for edible items, cancellations, and the payout terms (Net 15 by default, set in `src/config.js` → `marketplace`). Ask for a certificate of insurance. The app records whether the vendor says they're insured, but doesn't verify it.
+- NXGS sells partner products to the customer, so **NXGS collects the sales tax** on them, the same as your own add-ons. Ask your accountant how to record vendor payouts.
+- Sponsorship packages and starting prices are in `src/config.js` → `sponsorPackages`. Use a simple sponsorship agreement for terms and logo usage rights.
 
 ## Turn on text messages
 
@@ -165,6 +177,8 @@ src/guests.js      invitations, RSVPs and waivers
 src/gifts.js       gift cards and referral credits
 src/reviews.js     post-party reviews
 src/media.js       uploaded images (photos, signatures)
+src/sponsors.js    sponsors, placements, views and clicks
+src/marketplace.js outside vendors, partner products, markup, orders and payouts
 src/notifications.js  automatic emails and reminders
 src/quickbooks.js  QuickBooks Online connection and sync
 src/price-settings.js  prices edited from the admin page
@@ -176,4 +190,6 @@ test/              automated tests
 ## Not built yet
 
 - Online refunds (issue them in Stripe for now)
-- Multi-facility setup, for selling the app to other facilities or running the Massapequa location
+- Different prices per location (both locations share one price list today)
+- Vendor log-in portal (vendors work by email today)
+- Selling the app to other facilities (multi-company setup)

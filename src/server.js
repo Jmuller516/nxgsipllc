@@ -15,20 +15,28 @@ const { createGuests } = require('./guests');
 const { createGifts } = require('./gifts');
 const { createReviews } = require('./reviews');
 const media = require('./media');
+const { createSponsors } = require('./sponsors');
+const { createMarketplace } = require('./marketplace');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
 function createApp(db, opts = {}) {
   priceSettings.apply(db); // admin price edits laid over config.js starting prices
-  const hooks = { onPayment: [], onLead: [], onExpire: [] };
+  const hooks = { onPayment: [], onLead: [], onExpire: [], onCancel: [] };
   const svc = createService(db, config, opts.clock, hooks);
   const guests = createGuests(db, svc, { clock: opts.clock });
-  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests });
+  const sponsors = createSponsors(db, { clock: opts.clock });
+  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests, sponsors });
+  const marketplace = createMarketplace(db, { hooks: { onVendorOrder: [notifier.onVendorOrder], onVendorApplied: [notifier.onVendorApplied] } });
+  /** Rebuild the add-on list: starting prices + admin edits + live partner products. */
+  const refreshCatalog = () => { priceSettings.apply(db); marketplace.apply(config); };
+  refreshCatalog();
   const qbo = createQuickBooks(db, { clock: opts.clock, fetch: opts.qboFetch });
   const gifts = createGifts(db, svc, { hooks: { onGiftActivated: [notifier.onGiftActivated], onReferralCredit: [notifier.onReferralCredit] } });
   const reviews = createReviews(db, svc, { clock: opts.clock });
-  hooks.onPayment.push(notifier.onPayment, qbo.onPayment, gifts.onPayment);
+  hooks.onPayment.push(notifier.onPayment, qbo.onPayment, gifts.onPayment, marketplace.onPayment);
+  hooks.onCancel.push(marketplace.onCancel);
   hooks.onExpire.push((id) => gifts.releaseHeld(id));
   const assistant = createAssistant(db, svc, { clock: opts.clock, runner: opts.assistantRunner, fetch: opts.assistantFetch });
   hooks.onLead.push(notifier.onLead);
@@ -51,6 +59,14 @@ function createApp(db, opts = {}) {
     routes.push({ method, re, keys, handler, admin });
   };
 
+  // Customers can only book or browse public locations; staff can use any.
+  function publicLocationId(id) {
+    const l = config.locations.find((x) => x.id === (id || config.defaultLocation));
+    if (!l || !l.public) throw new BookingError('That location is not taking bookings yet.');
+    return l.id;
+  }
+  const partyDaysFor = (id) => Object.entries(svc.locCfg(id).partyHours).filter(([, h]) => h).map(([d]) => Number(d));
+
   // ---------- Public API ----------
   route('GET', '/api/config', () => ({
     business: { name: config.business.name, website: config.business.website, address: config.business.address, phone: config.business.phone, email: config.business.email },
@@ -62,13 +78,17 @@ function createApp(db, opts = {}) {
     packages: config.packages.filter((p) => p.active !== false),
     addOns: config.addOns.filter((a) => a.active !== false).map(({ costCents, vendor, ...a }) => a), // never expose cost or vendor
     addOnCategories: config.addOnCategories,
-    inquiryTypes: config.inquiryTypes,
+    inquiryTypes: config.inquiryTypes.filter((t) => !t.hidden),
+    sponsorPackages: config.sponsorPackages.map(({ suggestedMonthlyCents, ...p }) => p),
+    marketplace: { payoutTerms: config.marketplace.payoutTerms },
     party: { phases: config.party.phases, maxKids: config.party.maxKids },
     payments: { depositPercent: config.payments.depositPercent, balanceDueDaysBefore: config.payments.balanceDueDaysBefore, depositRefundable: config.payments.depositRefundable, holdMinutes: config.payments.holdMinutes },
     tax: config.tax,
     minDaysAhead: config.minDaysAhead,
     maxDaysAhead: config.maxDaysAhead,
-    partyDays: Object.entries(config.partyHours).filter(([, h]) => h).map(([d]) => Number(d)),
+    partyDays: partyDaysFor(config.defaultLocation),
+    locations: config.locations.filter((l) => l.public).map((l) => ({ id: l.id, name: l.name, shortName: l.shortName, address: l.address, phone: l.phone, partyDays: partyDaysFor(l.id) })),
+    defaultLocation: config.defaultLocation,
     stripe: stripe.enabled(),
     assistant: { enabled: assistant.enabled(), name: assistant.name() },
   }));
@@ -82,16 +102,16 @@ function createApp(db, opts = {}) {
     checkCode: (input) => quoteWithCode(input),
   }));
 
-  route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || '')));
+  route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || ''), publicLocationId(query.location)));
 
   route('POST', '/api/quote', ({ body }) => quoteWithCode(body));
 
   // Live availability calendar (public: open/full only, never who booked).
-  route('GET', '/api/calendar', ({ query }) => svc.calendarMonth(String(query.month || '')));
+  route('GET', '/api/calendar', ({ query }) => svc.calendarMonth(String(query.month || ''), publicLocationId(query.location)));
 
   route('POST', '/api/bookings', async ({ body, baseUrl }) => {
     quoteWithCode(body); // checks a gift card or referral code before anything is held
-    const b = svc.create(body);
+    const b = svc.create({ ...body, locationId: publicLocationId(body.locationId) });
     const url = await checkoutForNewBooking(b, body.code, baseUrl);
     return { ref: b.ref, checkoutUrl: url };
   });
@@ -159,6 +179,16 @@ function createApp(db, opts = {}) {
     return { code: c.code, status: c.status, balanceCents: c.status === 'active' ? c.balanceCents : 0 };
   });
 
+  // Sponsors (logo strips on public pages) and the Partners page
+  route('GET', '/api/sponsors', ({ query }) => ({ sponsors: sponsors.forPlacement(String(query.placement || ''), query.location || config.defaultLocation, { count: true }) }));
+  route('POST', '/api/partners/vendor', ({ body }) => marketplace.applyAsVendor(body));
+  route('POST', '/api/partners/sponsor', ({ body }) => {
+    const lead = svc.createLead({ eventType: 'sponsor', name: body.name, organization: body.organization, email: body.email, phone: body.phone,
+      message: [body.packageId ? `Interested in: ${config.sponsorPackages.find((p) => p.id === body.packageId)?.name || body.packageId}` : '', body.message].filter(Boolean).join('\n') });
+    return { ok: true, id: lead.id };
+  });
+  route('GET', '/api/partners/corporate', () => marketplace.corporateCatalog());
+
   // Reviews shown on the booking page (only parent-permitted, staff-approved ones)
   route('GET', '/api/reviews', () => reviews.publicList());
 
@@ -183,8 +213,9 @@ function createApp(db, opts = {}) {
   });
 
   // ---------- Admin API ----------
-  route('GET', '/api/admin/summary', () => svc.summary(), { admin: true });
-  route('GET', '/api/admin/bookings', ({ query }) => svc.list({ from: query.from, to: query.to, status: query.status }).map(adminView), { admin: true });
+  route('GET', '/api/admin/locations', () => config.locations, { admin: true });
+  route('GET', '/api/admin/summary', ({ query }) => svc.summary(query.location || null), { admin: true });
+  route('GET', '/api/admin/bookings', ({ query }) => svc.list({ from: query.from, to: query.to, status: query.status, locationId: query.location || undefined }).map(adminView), { admin: true });
   route('GET', '/api/admin/bookings/:id', ({ params }) => {
     const b = svc.get(Number(params.id));
     if (!b) throw notFound();
@@ -196,7 +227,7 @@ function createApp(db, opts = {}) {
     if (body.hostName !== undefined) svc.setHost(b.id, body.hostName);
     return adminView(svc.get(b.id));
   }, { admin: true });
-  route('GET', '/api/admin/runsheet', ({ query }) => runSheet(String(query.date || '')), { admin: true });
+  route('GET', '/api/admin/runsheet', ({ query }) => runSheet(String(query.date || ''), query.location || null), { admin: true });
 
   // Waivers
   route('GET', '/api/admin/waivers', ({ query }) => guests.searchWaivers(String(query.q || '')), { admin: true });
@@ -208,6 +239,31 @@ function createApp(db, opts = {}) {
   route('GET', '/api/admin/gift-cards', () => gifts.list(), { admin: true });
   route('POST', '/api/admin/gift-cards', ({ body }) => gifts.createManual(body), { admin: true });
   route('POST', '/api/admin/gift-cards/:id/void', ({ params }) => { gifts.voidCard(Number(params.id)); return { ok: true }; }, { admin: true });
+
+  // Sponsors
+  route('GET', '/api/admin/sponsors', () => ({ sponsors: sponsors.list(), totals: sponsors.totals(), packages: config.sponsorPackages, placements: sponsors.PLACEMENTS, locations: config.locations.map(({ id, name }) => ({ id, name })) }), { admin: true });
+  route('POST', '/api/admin/sponsors', ({ body }) => sponsors.create(body), { admin: true });
+  route('PATCH', '/api/admin/sponsors/:id', ({ params, body }) => sponsors.update(Number(params.id), body), { admin: true });
+  route('POST', '/api/admin/sponsors/:id/logo', ({ params, body }) => {
+    let path;
+    try { path = media.saveDataUrl(db, body.dataUrl, { label: 'logo' }); } catch (e) { throw new BookingError(e.message); }
+    media.remove(db, sponsors.setLogo(Number(params.id), path));
+    return sponsors.get(Number(params.id));
+  }, { admin: true });
+
+  // Marketplace (outside vendors)
+  route('GET', '/api/admin/marketplace', () => ({ vendors: marketplace.listVendors(), orders: marketplace.listOrders(), totals: marketplace.totals(), defaultMarkupPercent: config.marketplace.defaultMarkupPercent, payoutTerms: config.marketplace.payoutTerms }), { admin: true });
+  route('GET', '/api/admin/vendors/:id', ({ params }) => marketplace.getVendor(Number(params.id)) || (() => { throw notFound(); })(), { admin: true });
+  route('PATCH', '/api/admin/vendors/:id', ({ params, body }) => marketplace.updateVendor(Number(params.id), body), { admin: true });
+  route('POST', '/api/admin/vendors/:id/products', ({ params, body }) => marketplace.saveProduct(Number(params.id), null, body), { admin: true });
+  route('PATCH', '/api/admin/vendors/:id/products/:pid', ({ params, body }) => marketplace.saveProduct(Number(params.id), Number(params.pid), body), { admin: true });
+  route('POST', '/api/admin/products/:pid/photo', ({ params, body }) => {
+    let path;
+    try { path = media.saveDataUrl(db, body.dataUrl); } catch (e) { throw new BookingError(e.message); }
+    media.remove(db, marketplace.setProductPhoto(Number(params.pid), path));
+    return { ok: true, photo: path };
+  }, { admin: true });
+  route('PATCH', '/api/admin/vendor-orders/:id', ({ params, body }) => { marketplace.setOrderStatus(Number(params.id), body.status); return { ok: true }; }, { admin: true });
 
   // Reviews
   route('GET', '/api/admin/reviews', () => reviews.list(), { admin: true });
@@ -234,7 +290,7 @@ function createApp(db, opts = {}) {
   route('GET', '/api/admin/chats/:id', ({ params }) => assistant.transcript(params.id) || (() => { throw notFound(); })(), { admin: true });
 
   // Staff calendar & closures
-  route('GET', '/api/admin/calendar', ({ query }) => svc.adminMonth(String(query.month || '')), { admin: true });
+  route('GET', '/api/admin/calendar', ({ query }) => svc.adminMonth(String(query.month || ''), query.location || null), { admin: true });
   route('POST', '/api/admin/blocks', ({ body }) => svc.addBlock(body), { admin: true });
   route('DELETE', '/api/admin/blocks/:id', ({ params }) => { svc.removeBlock(Number(params.id)); return { ok: true }; }, { admin: true });
   route('GET', '/api/admin/calendar-feed', ({ baseUrl }) => ({ url: `${baseUrl}/feeds/${feedToken()}/parties.ics` }), { admin: true });
@@ -243,6 +299,7 @@ function createApp(db, opts = {}) {
   route('GET', '/api/admin/pricing', () => priceSettings.view(), { admin: true });
   route('PUT', '/api/admin/pricing', ({ body }) => {
     try { priceSettings.save(db, body); } catch (e) { throw new BookingError(e.message); }
+    refreshCatalog();
     return priceSettings.view();
   }, { admin: true });
   // Product photos for add-ons: the admin page sends a resized JPEG/PNG/WebP as a data URL.
@@ -252,19 +309,21 @@ function createApp(db, opts = {}) {
     let old;
     try { old = priceSettings.setPhoto(db, params.id, path); } catch (e) { media.remove(db, path); throw new BookingError(e.message); }
     removeMedia(old);
+    refreshCatalog();
     return priceSettings.view();
   }, { admin: true });
   route('DELETE', '/api/admin/addons/:id/photo', ({ params }) => {
     let old;
     try { old = priceSettings.setPhoto(db, params.id, null); } catch (e) { throw new BookingError(e.message); }
     removeMedia(old);
+    refreshCatalog();
     return priceSettings.view();
   }, { admin: true });
   function removeMedia(path) {
     media.remove(db, path);
   }
 
-  route('POST', '/api/admin/pricing/reset', () => { priceSettings.reset(db); return priceSettings.view(); }, { admin: true });
+  route('POST', '/api/admin/pricing/reset', () => { priceSettings.reset(db); refreshCatalog(); return priceSettings.view(); }, { admin: true });
 
   // Emails
   route('GET', '/api/admin/emails', () => ({ enabled: notifier.enabled, smsEnabled: notifier.smsEnabled, emails: notifier.list() }), { admin: true });
@@ -360,7 +419,7 @@ function createApp(db, opts = {}) {
     const review = reviews.forBooking(b.id);
     return {
       ref: b.ref, status: b.status, partyDate: b.party_date, timeLabel: b.timeLabel, endLabel: b.endLabel, schedule: b.schedule,
-      packageId: b.package_id, packageName: b.packageName, kids: b.kids, childName: b.child_name, childAge: b.child_age,
+      packageId: b.package_id, packageName: b.packageName, kids: b.kids, childName: b.child_name, childAge: b.child_age, location: b.location,
       parentFirstName: String(b.parent_name || '').split(' ')[0], email: b.email,
       theme: b.theme, themeInfo: b.themeInfo, details: b.details, detailsStatus: svc.detailsStatus(b),
       quote: { lines: b.quote.lines.map(({ costCents, vendor, ...l }) => l), subtotalCents: b.quote.subtotalCents, taxCents: b.quote.taxCents },
@@ -375,9 +434,10 @@ function createApp(db, opts = {}) {
   }
 
   /** Everything staff need on the day: one entry per party, in time order. */
-  function runSheet(date) {
+  function runSheet(date, locationId) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BookingError('Choose a date.');
-    const parties = svc.list({ from: date, to: date }).filter((b) => ['confirmed', 'paid', 'pending'].includes(b.status)).map((b) => {
+    const loc = svc.location(locationId);
+    const parties = svc.list({ from: date, to: date, locationId: loc.id }).filter((b) => ['confirmed', 'paid', 'pending'].includes(b.status)).map((b) => {
       const g = guests.partyGuests(b.id);
       const st = svc.detailsStatus(b);
       return {
@@ -394,8 +454,8 @@ function createApp(db, opts = {}) {
       if (!a.vendor || a.vendor === 'NXGS') continue;
       (deliveries[a.vendor] ||= []).push(`${a.name} × ${a.qty} for ${p.child || p.parent} (${p.timeLabel})`);
     }
-    const blocks = db.prepare('SELECT start_min, end_min, reason FROM blocks WHERE block_date = ?').all(date);
-    return { date, parties, deliveries, closures: blocks.map((k) => k.reason || 'Closed') };
+    const blocks = db.prepare('SELECT start_min, end_min, reason FROM blocks WHERE block_date = ? AND location_id = ?').all(date, loc.id);
+    return { date, location: loc, parties, deliveries, closures: blocks.map((k) => k.reason || 'Closed') };
   }
   async function startCheckout(b, amountCents, kind, baseUrl) {
     const back = customerUrl(b, baseUrl);
@@ -536,6 +596,12 @@ function createApp(db, opts = {}) {
       if (req.method === 'GET' && im) return sendPage(res, 'invite.html', { INVITE_TOKEN: im[1] });
       if (req.method === 'GET' && pathname === '/waiver') return sendFile(res, 'waiver.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/gift-cards') return sendFile(res, 'gift.html', { embeddable: true });
+      if (req.method === 'GET' && pathname === '/partners') return sendFile(res, 'partners.html', { embeddable: true });
+      const sp = /^\/s\/(\d+)$/.exec(pathname);
+      if (req.method === 'GET' && sp) {
+        const to = sponsors.click(Number(sp[1]));
+        return to ? send(res, { redirect: to }) : send(res, { error: 'Not found' }, 404);
+      }
       if (req.method === 'GET' && pathname === '/admin/runsheet') {
         if (!adminOk(req)) return askForLogin(res);
         return sendFile(res, 'runsheet.html');
@@ -578,7 +644,7 @@ function createApp(db, opts = {}) {
         const m = r.re.exec(pathname);
         if (!m) continue;
         if (r.admin && !adminOk(req)) return send(res, { error: 'Admin login required' }, 401);
-        const big = /\/(photo|details)$/.test(pathname) || pathname === '/api/waivers' || pathname === '/api/admin/waiver-text';
+        const big = /\/(photo|details|logo)$/.test(pathname) || pathname === '/api/waivers' || pathname === '/api/admin/waiver-text';
         const rawBody = ['POST', 'PATCH', 'PUT'].includes(req.method) ? await readBody(req, big ? 3_500_000 : 100_000) : '';
         let body = {};
         if (rawBody && !pathname.startsWith('/webhooks/')) {
@@ -625,13 +691,13 @@ function createApp(db, opts = {}) {
       `X-WR-CALNAME:${text(config.business.shortName + ' Parties')}`, `X-WR-TIMEZONE:${tz}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT15M', 'X-PUBLISHED-TTL:PT15M'];
     for (const b of svc.list({ from, to }).filter((x) => ['confirmed', 'paid', 'pending'].includes(x.status))) {
       const end = b.start_min + require('./scheduling').partyMinutes(config);
-      const title = `${b.status === 'pending' ? '[HOLD] ' : ''}${b.child_name ? `${b.child_name}'s party` : `${b.parent_name} party`} · ${b.kids} kids`;
+      const title = `${b.status === 'pending' ? '[HOLD] ' : ''}${config.locations.length > 1 ? `[${b.location.shortName}] ` : ''}${b.child_name ? `${b.child_name}'s party` : `${b.parent_name} party`} · ${b.kids} kids`;
       const desc = [`${b.packageName} · Booking ${b.ref}`, `Parent: ${b.parent_name} · ${b.phone} · ${b.email}`,
         b.schedule.map((s) => `${s.from} ${s.label}`).join('\n'),
         b.balanceCents > 0 ? `Balance owed: ${money(b.balanceCents)}${b.balanceOverdue ? ' (OVERDUE)' : ''}` : 'Paid in full',
         b.quote.lines.filter((l) => l.kind === 'addon').map((l) => `+ ${l.name} × ${l.qty}`).join('\n'),
         b.notes ? `Notes: ${b.notes}` : ''].filter(Boolean).join('\n');
-      lines.push('BEGIN:VEVENT', `UID:${b.ref}@nxgs-party-app`, `DTSTAMP:${stamp}`,
+      lines.push('BEGIN:VEVENT', `UID:${b.ref}@nxgs-party-app`, `DTSTAMP:${stamp}`, `LOCATION:${text(`${b.location.name}, ${b.location.address}`)}`,
         `DTSTART;TZID=${tz}:${local(b.party_date, b.start_min)}`, `DTEND;TZID=${tz}:${local(b.party_date, end)}`,
         `SUMMARY:${text(title)}`, `DESCRIPTION:${text(desc)}`, `STATUS:${b.status === 'pending' ? 'TENTATIVE' : 'CONFIRMED'}`, 'END:VEVENT');
     }
@@ -648,7 +714,7 @@ function createApp(db, opts = {}) {
     return lines.map((l) => { let out = ''; let rest = l; while (Buffer.byteLength(rest) > 74) { let cut = 74; while (Buffer.byteLength(rest.slice(0, cut)) > 74) cut--; out += rest.slice(0, cut) + '\r\n '; rest = rest.slice(cut); } return out + rest; }).join('\r\n') + '\r\n';
   }
 
-  return { handle, svc, notifier, qbo, assistant, guests, gifts, reviews, background, icsFeed, feedToken, runSheet };
+  return { handle, svc, notifier, qbo, assistant, guests, gifts, reviews, sponsors, marketplace, refreshCatalog, background, icsFeed, feedToken, runSheet };
 }
 
 // Brand colors & fonts from config.brand, loaded after style.css.
