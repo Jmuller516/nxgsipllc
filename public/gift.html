@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NXGS Gift Cards</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .gc { border-radius: 18px; padding: 22px; color: #fff; background: linear-gradient(135deg, var(--brand), #0d1b33); aspect-ratio: 1.7 / 1; max-width: 420px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 12px 30px rgb(0 0 0 / .2); }
+    .gc .amt { font-size: 2.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .gc .to { opacity: .9; }
+    .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+    .presets button { flex: 1; min-width: 80px; border: 2px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+    .presets button[aria-pressed="true"] { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow" id="biz">Next Generation Sports Complex</p>
+  <h1>Gift cards</h1>
+  <p class="muted">Good toward birthday parties and add-ons at NXGS. Delivered by email right away.</p>
+  <div id="done"></div>
+  <form id="buy" class="card" novalidate>
+    <div class="gc" aria-hidden="true"><div>NXGS · Gift card</div><div class="amt" id="pAmt">$50.00</div><div class="to" id="pTo">For someone special</div></div>
+    <h2>Amount</h2>
+    <div class="presets" id="presets"></div>
+    <label for="custom">Or another amount ($)</label><input id="custom" type="number" min="25" max="1000" step="5" inputmode="numeric" style="max-width:160px">
+    <h2>Who’s it for?</h2>
+    <div class="row">
+      <div><label for="toName">Recipient’s name</label><input id="toName"></div>
+      <div><label for="toEmail">Recipient’s email <span class="muted">(optional; we’ll email it)</span></label><input id="toEmail" type="email"></div>
+    </div>
+    <label for="msg">Message <span class="muted">(optional)</span></label><textarea id="msg" rows="2" maxlength="300" placeholder="Happy birthday! Have a blast at NXGS."></textarea>
+    <h2>From</h2>
+    <div class="row">
+      <div><label for="fromName">Your name</label><input id="fromName" autocomplete="name"></div>
+      <div><label for="fromEmail">Your email</label><input id="fromEmail" type="email" autocomplete="email"></div>
+    </div>
+    <div id="err" class="error hidden"></div>
+    <div class="actions"><button class="btn" type="submit" id="buyBtn">Continue to payment</button></div>
+  </form>
+  <div class="card">
+    <h2 style="margin-top:0">Check a balance</h2>
+    <div class="linkbox"><input id="balCode" placeholder="Gift card or credit code" style="border:0;background:transparent;padding:4px"><button class="btn small" id="balBtn" type="button">Check</button></div>
+    <p id="balOut" class="muted"></p>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const q = new URLSearchParams(location.search);
+if (q.get('embed')) document.body.classList.add('embedded');
+let CFG, cents = 5000;
+
+function update() {
+  $('pAmt').textContent = money(cents);
+  $('pTo').textContent = $('toName').value ? `For ${$('toName').value}` : 'For someone special';
+  document.querySelectorAll('#presets button').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.c) === cents && !$('custom').value)));
+}
+
+async function init() {
+  CFG = await (await fetch('/api/config')).json();
+  $('biz').textContent = CFG.business.name;
+  cents = CFG.giftCards.presetCents[0];
+  $('presets').innerHTML = CFG.giftCards.presetCents.map((c) => `<button type="button" data-c="${c}">${money(c)}</button>`).join('');
+  $('presets').querySelectorAll('button').forEach((b) => b.onclick = () => { cents = Number(b.dataset.c); $('custom').value = ''; update(); });
+  $('custom').oninput = () => { const v = Math.round(Number($('custom').value) * 100); if (v) cents = v; update(); };
+  $('toName').oninput = update;
+  update();
+  if (q.get('code') || q.get('session_id')) {
+    const r = await (await fetch('/api/gift-cards/status?' + (q.get('session_id') ? 'session_id=' + encodeURIComponent(q.get('session_id')) : 'code=' + encodeURIComponent(q.get('code'))))).json();
+    if (r.active) {
+      $('done').innerHTML = `<div class="card"><p class="banner ok">Payment received. Thank you!</p>
+        <div class="gc"><div>NXGS · Gift card</div><div class="amt">${money(r.amountCents)}</div><div class="to">For ${esc(r.recipientName)} · <span class="code-big" style="font-size:1rem">${esc(r.code)}</span></div></div>
+        <p>${r.recipientEmail ? `We emailed it to ${esc(r.recipientEmail)} and sent you a copy.` : 'We emailed you a copy to print or forward.'}</p></div>`;
+      $('buy').classList.add('hidden');
+    }
+  }
+}
+
+$('buy').onsubmit = async (e) => {
+  e.preventDefault();
+  $('err').classList.add('hidden');
+  $('buyBtn').disabled = true;
+  const r = await fetch('/api/gift-cards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    amountCents: cents, recipientName: $('toName').value, recipientEmail: $('toEmail').value, message: $('msg').value, buyerName: $('fromName').value, buyerEmail: $('fromEmail').value,
+  }) });
+  const d = await r.json();
+  if (!r.ok) { $('err').textContent = d.error; $('err').classList.remove('hidden'); $('buyBtn').disabled = false; return; }
+  try { window.top.location.href = d.checkoutUrl; } catch { location.href = d.checkoutUrl; }
+};
+
+$('balBtn').onclick = async () => {
+  const r = await fetch('/api/gift-cards/balance?code=' + encodeURIComponent($('balCode').value));
+  const d = await r.json();
+  $('balOut').textContent = r.ok ? (d.status === 'active' ? `${d.code}: ${money(d.balanceCents)} left` : `${d.code} is no longer active.`) : d.error;
+};
+
+init();
+</script>
+</body>
+</html>

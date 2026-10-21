@@ -74,7 +74,13 @@ HOW TO BOOK
 2. Use get_quote to give the exact price, deposit and balance.
 3. Ask for the parent's full name, email and phone, and the birthday child's first name and age (age is optional). Mention any allergy or special request goes in the notes.
 4. Before booking, recap date, start time, package, kids, add-ons and total, and get a clear yes.
-5. Call book_party. Then tell them the time is held for ${p.holdMinutes} minutes and to tap the payment button that appears in the chat to pay the deposit and confirm. Don't paste the link yourself.
+5. Call book_party. Then tell them the time is held for ${p.holdMinutes} minutes and to tap the button that appears in the chat to pay the deposit and confirm (if a gift card covered it, the button just opens their booking). Don't paste the link yourself.
+6. Mention that after paying, their booking page has an invitation link to send guests: guests RSVP and sign the required waiver online.
+
+EXTRAS
+- Sport themes (optional, can be chosen later): ${cfg.themes.map((t) => `${t.name} (id "${t.id}")`).join(', ')}.
+- Gift cards and referral codes: pass the code to get_quote and book_party. A referral code gives ${money(cfg.referral.friendDiscountCents)} off. Gift cards can be bought at the Gift cards page.
+- Every child who plays needs a signed waiver (good for a year). Guests sign through the invitation link or at the front desk.
 
 BOUNDARIES
 - Only discuss NXGS parties, events and the facility. Politely steer anything else back.
@@ -136,13 +142,16 @@ BOUNDARIES
         kids: { type: 'integer', minimum: 1 },
         party_date: { type: 'string', description: 'YYYY-MM-DD' },
         add_ons: addOnSchema,
+        code: { type: 'string', description: 'Gift card or referral code, if the customer has one' },
       }, required: ['package_id', 'kids', 'party_date'] },
-      run(input) {
-        const q = svc.quoteFor({ packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), addOns: input.add_ons || {} });
+      run(input, ctx) {
+        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), addOns: input.add_ons || {}, code: input.code || undefined };
+        const q = ctx.checkCode ? ctx.checkCode(args) : svc.quoteFor(args);
         return {
-          lines: q.lines.map((l) => `${l.name}${l.qty > 1 ? ` x${l.qty}` : ''}: ${money(l.totalCents)}`),
+          lines: q.lines.map((l) => `${l.name}${l.qty > 1 ? ` x${l.qty}` : ''}: ${l.totalCents < 0 ? '-' + money(-l.totalCents) : money(l.totalCents)}`),
           subtotal: money(q.subtotalCents), tax: money(q.taxCents), total: money(q.totalCents),
-          due_today: money(q.depositCents), paid_in_full_today: q.payInFull,
+          deposit: money(q.depositCents), gift_card_applied: q.gift ? money(q.gift.applyCents) : undefined,
+          due_today: money(q.dueTodayCents ?? q.depositCents), paid_in_full_today: q.payInFull,
           balance: money(q.balanceCents), balance_due_date: q.balanceDueDate,
         };
       },
@@ -161,19 +170,25 @@ BOUNDARIES
         phone: { type: 'string' },
         child_name: { type: 'string' },
         child_age: { type: 'integer' },
-        notes: { type: 'string', description: 'Allergies, theme, special requests' },
+        notes: { type: 'string', description: 'Allergies or special requests' },
+        theme: { type: 'string', enum: cfg.themes.map((t) => t.id), description: 'Sport theme, if chosen' },
+        code: { type: 'string', description: 'Gift card or referral code, if any' },
       }, required: ['package_id', 'kids', 'party_date', 'start_time', 'parent_name', 'email', 'phone'] },
       async run(input, ctx) {
         if (ctx.session.bookings.length >= MAX_BOOKINGS) throw new BookingError('Too many bookings from one chat. Offer a staff follow-up instead.');
+        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), addOns: input.add_ons || {}, code: input.code || undefined, email: input.email };
+        const q = ctx.checkCode ? ctx.checkCode(args) : svc.quoteFor(args);
         const b = svc.create({
+          theme: input.theme, code: input.code || undefined,
           packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), time: String(input.start_time || ''),
           addOns: input.add_ons || {}, parentName: input.parent_name, email: input.email, phone: input.phone,
           childName: input.child_name, childAge: input.child_age, notes: [input.notes, 'Booked through the chat assistant.'].filter(Boolean).join('\n'),
         });
-        const url = await ctx.checkout(b);
+        const url = await ctx.checkout(b, input.code || undefined);
+        const due = q.dueTodayCents ?? b.deposit_cents;
         ctx.session.bookings.push(b.ref);
-        ctx.actions.push({ type: 'checkout', url, ref: b.ref, label: b.quote.payInFull ? `Pay ${money(b.deposit_cents)} to confirm` : `Pay ${money(b.deposit_cents)} deposit to confirm` });
-        return { booking_number: b.ref, held_minutes: cfg.payments.holdMinutes, due_now: money(b.deposit_cents), note: 'A payment button is now showing in the chat.' };
+        ctx.actions.push({ type: 'checkout', url, ref: b.ref, label: due <= 0 ? 'View your booking' : b.quote.payInFull ? `Pay ${money(due)} to confirm` : `Pay ${money(due)} deposit to confirm` });
+        return { booking_number: b.ref, held_minutes: cfg.payments.holdMinutes, due_now: money(due), paid_by_gift_card: due <= 0, note: 'A payment button is now showing in the chat.' };
       },
     },
     {
@@ -298,7 +313,7 @@ BOUNDARIES
    * One customer message in, one reply out.
    * @returns {Promise<{sessionId, reply, actions}>}
    */
-  async function chat({ sessionId, message, ip, checkout }) {
+  async function chat({ sessionId, message, ip, checkout, checkCode }) {
     const text = String(message ?? '').trim();
     if (!text) throw new BookingError('Type a message first.');
     if (text.length > MAX_MESSAGE_CHARS) throw new BookingError(`Please keep messages under ${MAX_MESSAGE_CHARS} characters.`);
@@ -314,7 +329,7 @@ BOUNDARIES
     session.userMessages++;
     session.transcript.push({ role: 'user', text, at });
     session.messages.push({ role: 'user', content: text });
-    const ctx = { session, actions: [], checkout };
+    const ctx = { session, actions: [], checkout, checkCode };
 
     let reply;
     try {

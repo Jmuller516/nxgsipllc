@@ -38,6 +38,13 @@ function quote(input, cfg = config) {
     lines.push({ id: addOn.id, name: addOn.name, qty, unitCents: addOn.priceCents, taxable: addOn.taxable, kind: 'addon', vendor: addOn.vendor, costCents: addOn.costCents });
   }
 
+  // A discount (e.g. a referral code) comes off before tax.
+  if (input.discount && input.discount.cents > 0) {
+    const before = lines.reduce((s, l) => s + l.unitCents * l.qty, 0);
+    const cents = Math.min(Math.round(input.discount.cents), before);
+    lines.push({ id: 'discount', name: input.discount.label || 'Discount', qty: 1, unitCents: -cents, taxable: true, kind: 'discount', code: input.discount.code });
+  }
+
   for (const l of lines) l.totalCents = l.unitCents * l.qty;
 
   const subtotalCents = lines.reduce((s, l) => s + l.totalCents, 0);

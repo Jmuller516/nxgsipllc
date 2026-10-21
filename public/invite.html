@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You're Invited!</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+<main id="app"><p class="muted">Loading invitation…</p></main>
+
+<script src="/static/waiver.js"></script>
+<script>
+const TOKEN = "__INVITE_TOKEN__";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem('nxgs-rsvp-' + TOKEN) || 'null'); } catch { return null; } },
+  set(v) { try { localStorage.setItem('nxgs-rsvp-' + TOKEN, JSON.stringify(v)); } catch {} },
+};
+let INV;
+
+function calLink(inv) {
+  const to24 = (label) => { const m = /(\d+):(\d+) (AM|PM)/.exec(label); let h = Number(m[1]) % 12 + (m[3] === 'PM' ? 12 : 0); return `${String(h).padStart(2, '0')}${m[2]}00`; };
+  const d = inv.date.replace(/-/g, '');
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: `${inv.childName ? inv.childName + "'s" : ''} birthday party at NXGS`.trim(), dates: `${d}T${to24(inv.timeLabel)}/${d}T${to24(inv.endLabel)}`, ctz: 'America/New_York', location: `${inv.place.name}, ${inv.place.address}` });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
+
+async function load() {
+  const r = await fetch('/api/invite/' + TOKEN);
+  if (!r.ok) { $('app').innerHTML = '<div class="card"><h1>Invitation not found</h1><p>Please check the link you were sent.</p></div>'; return; }
+  INV = await r.json();
+  const t = INV.theme || { emoji: '🎉', color: 'var(--brand)', name: '' };
+  const age = INV.childAge ? `${ordinal(INV.childAge)} ` : '';
+  const saved = store.get();
+  $('app').innerHTML = `
+    <div class="theme-hero" style="background:${esc(t.color)}">
+      <div class="emoji" aria-hidden="true">${t.emoji}</div>
+      <p class="eyebrow" style="color:rgb(255 255 255 / .85);margin:8px 0 0">You’re invited!</p>
+      <h1>${INV.childName ? `${esc(INV.childName)}’s ${age}Birthday` : 'A birthday party'}${t.name ? ` · ${esc(t.name)}` : ''}</h1>
+      <p style="margin:0">${esc(fmtDate(INV.date))} · ${esc(INV.timeLabel)} – ${esc(INV.endLabel)}</p>
+    </div>
+    ${INV.active ? '' : '<p class="banner">This party is no longer active. Please check with the host.</p>'}
+    <div class="card">
+      <dl class="facts" style="margin-top:0">
+        <dt>Where</dt><dd>${esc(INV.place.name)}<br><span class="muted" style="font-weight:400">${esc(INV.place.address)}</span></dd>
+        <dt>Host</dt><dd>${esc(INV.hostFirstName)}</dd>
+      </dl>
+      <h2>What we’ll do</h2>
+      <ul class="schedule">${INV.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
+      <div class="actions"><a class="btn ghost small" href="${esc(calLink(INV))}" target="_blank" rel="noopener">Add to Google Calendar</a></div>
+      <p class="muted">Please wear sneakers. Every child who plays needs a signed waiver, so sign it below and check-in will be quick.</p>
+    </div>
+    ${INV.active ? `
+    <div class="card" id="rsvpCard">
+      <h2 style="margin-top:0">RSVP</h2>
+      ${saved ? `<p class="banner ok">You replied “${saved.attending === 'yes' ? 'Coming' : 'Can’t make it'}” for ${esc(saved.childName)}. You can change it below.</p>` : ''}
+      <form id="rsvp" novalidate>
+        <div class="toggle" role="radiogroup">
+          <label><input type="radio" name="att" value="yes" ${!saved || saved.attending === 'yes' ? 'checked' : ''}> 🎉 We’ll be there</label>
+          <label><input type="radio" name="att" value="no" ${saved && saved.attending === 'no' ? 'checked' : ''}> Can’t make it</label>
+        </div>
+        <div class="row">
+          <div><label for="rChild">Your child’s name</label><input id="rChild" value="${esc(saved?.childName || '')}"></div>
+          <div><label for="rParent">Your name</label><input id="rParent" autocomplete="name" value="${esc(saved?.parentName || '')}"></div>
+        </div>
+        <div class="row">
+          <div><label for="rEmail">Email</label><input id="rEmail" type="email" autocomplete="email" value="${esc(saved?.email || '')}"></div>
+          <div><label for="rPhone">Phone <span class="muted">(optional)</span></label><input id="rPhone" type="tel" autocomplete="tel" value="${esc(saved?.phone || '')}"></div>
+        </div>
+        <label for="rAllergy">Food allergies <span class="muted">(or “none”)</span></label><input id="rAllergy" value="${esc(saved?.allergies || '')}">
+        <div id="rErr" class="error hidden"></div>
+        <div class="actions"><button class="btn" type="submit">Send RSVP</button></div>
+      </form>
+    </div>
+    <div class="card hidden" id="waiverCard"></div>` : ''}`;
+  if ($('rsvp')) $('rsvp').onsubmit = submitRsvp;
+}
+
+async function submitRsvp(e) {
+  e.preventDefault();
+  const saved = store.get();
+  const body = {
+    rsvpToken: saved?.rsvpToken, attending: document.querySelector('input[name=att]:checked').value,
+    childName: $('rChild').value, parentName: $('rParent').value, email: $('rEmail').value, phone: $('rPhone').value, allergies: $('rAllergy').value,
+  };
+  $('rErr').classList.add('hidden');
+  const r = await fetch(`/api/invite/${TOKEN}/rsvp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) { $('rErr').textContent = d.error; $('rErr').classList.remove('hidden'); return; }
+  store.set({ ...body, rsvpToken: d.rsvpToken });
+  const card = $('rsvpCard');
+  if (d.attending === 'no') {
+    card.innerHTML = `<h2 style="margin-top:0">Thanks for letting us know</h2><p>We’ll miss ${esc(body.childName)}! You can change your reply anytime with this link.</p>`;
+    return;
+  }
+  card.innerHTML = `<h2 style="margin-top:0">See you there! 🎉</h2><p>${esc(body.childName)} is on the guest list.</p>`;
+  const w = $('waiverCard');
+  w.classList.remove('hidden');
+  if (d.waiverOnFile) {
+    w.innerHTML = `<h2 style="margin-top:0">Waiver</h2><p class="banner ok">✓ We already have a signed waiver for ${esc(body.childName)}. Nothing else to do!</p>`;
+    return;
+  }
+  w.innerHTML = '<h2 style="margin-top:0">One last step: sign the waiver</h2><p class="muted">It takes about a minute and is good for a year at NXGS.</p><div id="waiverMount"></div>';
+  NXWaiver.mount($('waiverMount'), {
+    inviteToken: TOKEN,
+    prefill: { childName: body.childName, guardianName: body.parentName, guardianEmail: body.email, guardianPhone: body.phone, medicalNotes: body.allergies },
+    onDone: (res) => { w.innerHTML = `<h2 style="margin-top:0">All set!</h2><p class="banner ok">✓ Waiver signed for ${esc(res.childName)}. See you at the party!</p>`; w.scrollIntoView({ block: 'start' }); },
+  });
+  w.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+load();
+</script>
+</body>
+</html>

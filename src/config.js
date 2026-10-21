@@ -10,6 +10,8 @@ module.exports = {
     website: 'https://www.nxgs.net',
     email: 'joseph@nxgs.net',
     timezone: 'America/New_York',
+    address: 'Farmingdale, NY',   // TODO: full street address for invitations and directions
+    phone: null,                  // front desk number shown to customers, e.g. '(516) 555-0100'
   },
 
   // Look & feel. Change these to match the new nxgs.net design.
@@ -187,4 +189,55 @@ module.exports = {
     { id: 'team', name: 'Team skill building' },
     { id: 'other', name: 'Something else' },
   ],
+
+  // Sport themes parents can pick. Used on invitations, the details form and the staff run sheet.
+  themes: [
+    { id: 'soccer', name: 'Soccer', emoji: '⚽', color: '#1f9d55' },
+    { id: 'baseball', name: 'Baseball', emoji: '⚾', color: '#c0392b' },
+    { id: 'softball', name: 'Softball', emoji: '🥎', color: '#d4a017' },
+    { id: 'basketball', name: 'Basketball', emoji: '🏀', color: '#e67e22' },
+    { id: 'football', name: 'Football', emoji: '🏈', color: '#7b4a2a' },
+    { id: 'lacrosse', name: 'Lacrosse', emoji: '🥍', color: '#2c6db5' },
+    { id: 'cheer', name: 'Cheer', emoji: '📣', color: '#c2185b' },
+    { id: 'all-sports', name: 'All-sports mix', emoji: '🏆', color: '#0b4fd6' },
+  ],
+
+  // Liability waivers. The text below is a SAMPLE ONLY — replace it (Admin → Settings) with the waiver
+  // your attorney or insurance carrier gives you before using it with real customers.
+  waiver: {
+    validDays: 365,
+    title: 'Participant Waiver and Release',
+    sampleText: [
+      'SAMPLE WAIVER: replace this text with the waiver provided by your attorney or insurance carrier.',
+      'I am the parent or legal guardian of the child named below. I understand that sports and play activities at Next Generation Sports Complex involve physical activity and a risk of injury.',
+      'I agree that my child will follow staff instructions and facility rules.',
+      'I confirm that my child is in good health and able to take part, and I have listed any medical conditions or allergies staff should know about.',
+      'I authorize staff to seek emergency medical care for my child if I cannot be reached.',
+      'I give permission for photos taken during events to be used by the facility unless I tell staff otherwise.',
+    ].join('\n\n'),
+  },
+
+  // Referral program: a family that books shares their code.
+  referral: {
+    friendDiscountCents: 2500,   // the new family gets this off their party
+    referrerCreditCents: 2500,   // the family who shared the code gets this as party credit
+  },
+
+  giftCards: {
+    presetCents: [5000, 10000, 25000],
+    minCents: 2500,
+    maxCents: 100000,
+  },
+
+  reviews: {
+    askDaysAfter: 1,             // review request goes out this many days after the party
+    googleReviewUrl: null,       // e.g. your Google Business "write a review" link; offered after 4–5 star reviews
+  },
+
+  // Party details form: which add-ons need what from the parent.
+  details: {
+    shirtSizes: ['YXS', 'YS', 'YM', 'YL', 'YXL', 'AS', 'AM', 'AL', 'AXL', 'A2XL'],
+    needsPhoto: ['scoreboard', 'poster', 'favor-box'],
+    needsJerseyNumber: ['jersey-bag', 'bag-tag', 'locker-box'],
+  },
 };

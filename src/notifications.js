@@ -28,14 +28,42 @@ async function resendSend({ from, to, replyTo, subject, html, text }) {
   return data.id;
 }
 
+/** Text messages through Twilio. Needs TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (or TWILIO_MESSAGING_SERVICE_SID). */
+async function twilioSend({ to, body }) {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const form = new URLSearchParams({ To: to, Body: body });
+  if (process.env.TWILIO_MESSAGING_SERVICE_SID) form.set('MessagingServiceSid', process.env.TWILIO_MESSAGING_SERVICE_SID);
+  else form.set('From', process.env.TWILIO_FROM);
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Twilio error ${res.status}`);
+  return data.sid;
+}
+const twilioReady = () => !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_FROM || process.env.TWILIO_MESSAGING_SERVICE_SID));
+
+/** US phone number in +1XXXXXXXXXX form, or null. */
+function toE164(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  return null;
+}
+
 function createNotifier(db, svc, opts = {}) {
   const cfg = opts.config || config;
   const clock = opts.clock || (() => new Date());
   const baseUrl = () => (opts.baseUrl || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
   const sender = opts.sender || (process.env.RESEND_API_KEY ? resendSend : null);
+  const smsSender = opts.smsSender || (twilioReady() ? twilioSend : null);
+  const guests = opts.guests || null;
   const biz = cfg.business;
 
   const customerLink = (b) => `${baseUrl()}/booking/${b.ref}?t=${b.token}`;
+  const inviteLink = (b) => `${baseUrl()}/invite/${b.invite_token}`;
 
   // ---------- layout ----------
   function wrap(heading, bodyHtml, button) {
@@ -83,14 +111,27 @@ function createNotifier(db, svc, opts = {}) {
     return info.changes > 0;
   }
 
+  /** Text message — only to customers who opted in at booking. Logged in the same list as emails. */
+  function queueSms({ kind, booking, body, dedupeKey }) {
+    if (!booking.sms_opt_in) return false;
+    const to = toE164(booking.phone);
+    if (!to) return false;
+    const text = `NXGS: ${body} Reply STOP to opt out.`;
+    const info = db.prepare(`INSERT OR IGNORE INTO emails (dedupe_key, booking_id, kind, to_addr, subject, html, text, channel)
+      VALUES (?, ?, ?, ?, ?, '', ?, 'sms')`).run(dedupeKey ? `sms:${dedupeKey}` : null, booking.id, kind, to, text.slice(0, 90), text);
+    return info.changes > 0;
+  }
+
   function toStaff(args) {
     for (const addr of cfg.emails.staffAlerts || []) queue({ ...args, to: addr, dedupeKey: args.dedupeKey ? `${args.dedupeKey}:${addr}` : null });
   }
 
   // ---------- event emails (called by the booking service) ----------
   function onPayment(booking, payment) {
+    // A gift card used together with a card payment is folded into the confirmation that follows.
+    if (payment.method === 'gift_card' && /\[split\]/.test(payment.note || '')) return;
     const b = svc.get(booking.id);
-    const first = b.paid_cents === payment.amount_cents; // this payment was the first one
+    const first = !db.prepare(`SELECT 1 FROM emails WHERE dedupe_key = ?`).get(`booking_confirmed:${b.id}`);
     if (first) {
       const heading = b.status === 'paid' ? `You're booked! ${who(b)} is paid in full` : `You're booked! Deposit received for ${who(b)}`;
       queue({
@@ -98,9 +139,16 @@ function createNotifier(db, svc, opts = {}) {
         subject: `Party confirmed — ${fmtDate(b.party_date)} at ${b.timeLabel} (${b.ref})`,
         html: wrap(heading, `<p>Hi ${esc(b.parent_name)}, thanks for booking with ${esc(biz.name)}!</p>${partyFacts(b)}${moneyFacts(b)}
           ${b.balanceCents > 0 ? `<p>The remaining <b>${money(b.balanceCents)}</b> is due by <b>${esc(fmtDate(b.balance_due_date))}</b>. You can pay it anytime from your booking page.</p>` : ''}
+          <p><b>Next steps</b> (all on your booking page):</p>
+          <ol style="padding-left:20px;margin:0 0 12px">
+            <li>Fill in your party details (theme, name spelling, allergies${b.quote.lines.some((l) => l.id === 'shirts') ? ', shirt sizes' : ''}).</li>
+            <li>Send your invitation link to guests: <a href="${esc(inviteLink(b))}">${esc(inviteLink(b))}</a>. Guests RSVP and sign the waiver online.</li>
+          </ol>
+          ${b.referral_code ? `<p style="background:#f4f6f9;padding:10px 12px;border-radius:8px">Know another family planning a party? Share your code <b>${esc(b.referral_code)}</b>: they get ${money(cfg.referral.friendDiscountCents)} off and you get ${money(cfg.referral.referrerCreditCents)} in party credit.</p>` : ''}
           <p style="color:#5b6676;font-size:13px">The ${cfg.payments.depositPercent}% deposit is non-refundable.</p>`, { label: 'View my booking', url: customerLink(b) }),
-        text: `Hi ${b.parent_name}, thanks for booking with ${biz.name}!\n\n${textFacts(b)}\n\n${textMoney(b)}\n${b.balanceCents > 0 ? `Balance due by ${fmtDate(b.balance_due_date)}.\n` : ''}\nView or pay: ${customerLink(b)}`,
+        text: `Hi ${b.parent_name}, thanks for booking with ${biz.name}!\n\n${textFacts(b)}\n\n${textMoney(b)}\n${b.balanceCents > 0 ? `Balance due by ${fmtDate(b.balance_due_date)}.\n` : ''}\nNext: fill in your party details and send this invitation link to guests: ${inviteLink(b)}\n\nView or pay: ${customerLink(b)}`,
       });
+      queueSms({ kind: 'sms_confirmed', booking: b, dedupeKey: `confirmed:${b.id}`, body: `${who(b)} is booked for ${fmtDate(b.party_date)} at ${b.timeLabel}. Details & invite link: ${customerLink(b)}` });
       toStaff({
         kind: 'staff_new_booking', bookingId: b.id, dedupeKey: `staff_new_booking:${b.id}`,
         subject: `New party: ${b.child_name || b.parent_name} — ${fmtDate(b.party_date)} ${b.timeLabel}`,
@@ -134,6 +182,40 @@ function createNotifier(db, svc, opts = {}) {
     });
   }
 
+  // ---------- gift cards & referral credits ----------
+  function onGiftActivated(card) {
+    const amount = money(card.initial_cents);
+    const body = (greeting) => `<p>${greeting}</p>
+      <div style="border:2px dashed ${cfg.brand.primaryColor};border-radius:12px;padding:16px;text-align:center;margin:12px 0">
+        <div style="font-size:13px;color:#5b6676">${esc(biz.name)} gift card</div>
+        <div style="font-size:30px;font-weight:800;margin:4px 0">${amount}</div>
+        <div style="font-family:monospace;font-size:18px;letter-spacing:.06em">${esc(card.code)}</div>
+      </div>
+      ${card.message ? `<p style="font-style:italic">"${esc(card.message)}"</p>` : ''}
+      <p>Enter the code when booking a party online, or show it at the front desk.</p>`;
+    if (card.recipient_email) {
+      queue({ kind: 'gift_card', to: card.recipient_email, dedupeKey: `gift_card:${card.id}`,
+        subject: `You got a ${amount} ${biz.shortName} gift card${card.buyer_name ? ` from ${card.buyer_name}` : ''}!`,
+        html: wrap(`A gift for ${card.recipient_name}!`, body(card.buyer_name ? `${esc(card.buyer_name)} sent you a gift card for parties and events at ${esc(biz.name)}.` : `Here's your gift card for ${esc(biz.name)}.`), { label: 'Book a party', url: `${baseUrl()}/book` }),
+        text: `${card.buyer_name || 'Someone'} sent you a ${amount} ${biz.name} gift card.\nCode: ${card.code}\n${card.message ? `"${card.message}"\n` : ''}Book: ${baseUrl()}/book` });
+    }
+    if (card.buyer_email) {
+      queue({ kind: 'gift_card_receipt', to: card.buyer_email, dedupeKey: `gift_card_receipt:${card.id}`,
+        subject: `Your ${amount} gift card for ${card.recipient_name}`,
+        html: wrap('Thanks for your gift card purchase', body(`Here's the gift card for ${esc(card.recipient_name)}${card.recipient_email ? `. We also emailed it to ${esc(card.recipient_email)}` : '. Print or forward this email to give it'}.`)),
+        text: `Gift card for ${card.recipient_name}: ${amount}\nCode: ${card.code}` });
+    }
+  }
+
+  function onReferralCredit(card, referrer) {
+    queue({ kind: 'referral_credit', to: card.recipient_email, bookingId: referrer.id, dedupeKey: `referral_credit:${card.id}`,
+      subject: `You earned ${money(card.initial_cents)} in party credit!`,
+      html: wrap('Thanks for spreading the word!', `<p>Hi ${esc(referrer.parent_name)}, a family you referred just booked their party, so here's ${money(card.initial_cents)} in party credit.</p>
+        <p style="font-family:monospace;font-size:18px;letter-spacing:.06em;text-align:center;background:#f4f6f9;padding:12px;border-radius:8px">${esc(card.code)}</p>
+        <p>Use it on ${referrer.balanceCents > 0 ? 'your remaining balance or ' : ''}your next party. Enter the code at checkout.</p>`, { label: 'Use my credit', url: referrer.balanceCents > 0 ? customerLink(referrer) : `${baseUrl()}/book` }),
+      text: `Thanks for referring a friend! Here's ${money(card.initial_cents)} in party credit: ${card.code}` });
+  }
+
   // ---------- scheduled reminders ----------
   /** Queue whatever reminders are due today. Safe to run as often as you like: each goes once. */
   function queueReminders() {
@@ -155,6 +237,7 @@ function createNotifier(db, svc, opts = {}) {
             html: wrap(`Your balance is due soon`, `<p>Hi ${esc(b.parent_name)}, just a reminder that the remaining <b>${money(b.balanceCents)}</b> for ${esc(who(b))} is due by <b>${esc(fmtDate(b.balance_due_date))}</b>.</p>${partyFacts(b)}${moneyFacts(b)}`, { label: `Pay ${money(b.balanceCents)}`, url: customerLink(b) }),
             text: `Reminder: ${money(b.balanceCents)} for ${who(b)} is due by ${fmtDate(b.balance_due_date)}.\n\n${textFacts(b)}\n\nPay here: ${customerLink(b)}`,
           }) ? 1 : 0;
+          queueSms({ kind: 'sms_balance', booking: b, dedupeKey: `balance:${b.id}`, body: `Your ${money(b.balanceCents)} balance for ${who(b)} is due ${fmtDate(b.balance_due_date)}. Pay here: ${customerLink(b)}` });
         }
         // Overdue: once, the day after it was due.
         if (today > b.balance_due_date) {
@@ -172,17 +255,43 @@ function createNotifier(db, svc, opts = {}) {
           });
         }
       }
+      // Party details still missing, 10 days out (or right away for parties booked closer than that).
+      const st = svc.detailsStatus(b);
+      if (!st.complete && today >= addDays(b.party_date, -10)) {
+        n += queue({
+          kind: 'details_reminder', to: b.email, bookingId: b.id, dedupeKey: `details_reminder:${b.id}`,
+          subject: `A few details needed for ${who(b)}`,
+          html: wrap('Help us get everything ready', `<p>Hi ${esc(b.parent_name)}, we still need a few things for ${esc(who(b))} on ${esc(fmtDate(b.party_date))}:</p>
+            <ul>${st.missing.map((m) => `<li>${esc(m)}</li>`).join('')}</ul><p>It only takes a minute.</p>`, { label: 'Add party details', url: `${customerLink(b)}#details` }),
+          text: `We still need: ${st.missing.join(', ')}.\nAdd them here: ${customerLink(b)}#details`,
+        }) ? 1 : 0;
+      }
       // Party tomorrow.
       if (addDays(today, 1) === b.party_date) {
+        const g = guests ? guests.partyGuests(b.id) : null;
+        queueSms({ kind: 'sms_tomorrow', booking: b, dedupeKey: `tomorrow:${b.id}`, body: `See you tomorrow at ${b.timeLabel} for ${who(b)}! Please arrive 10-15 min early.${g && g.missingWaivers.length ? ` ${g.missingWaivers.length} guest waiver(s) still unsigned: ${inviteLink(b)}` : ''}` });
         n += queue({
           kind: 'party_tomorrow', to: b.email, bookingId: b.id, dedupeKey: `party_tomorrow:${b.id}`,
           subject: `See you tomorrow at ${b.timeLabel}! — ${biz.name}`,
           html: wrap(`See you tomorrow!`, `<p>Hi ${esc(b.parent_name)}, we're getting ready for ${esc(who(b))}. Please arrive about 10–15 minutes early.</p>${partyFacts(b)}
             <p><b>Schedule:</b><br>${b.schedule.map((s) => `${esc(s.from)} — ${esc(s.label)}`).join('<br>')}</p>
-            ${b.balanceCents > 0 ? `<p>Balance remaining: <b>${money(b.balanceCents)}</b>.</p>` : ''}`, { label: 'View my booking', url: customerLink(b) }),
+            ${b.balanceCents > 0 ? `<p>Balance remaining: <b>${money(b.balanceCents)}</b>.</p>` : ''}
+            ${g ? `<p><b>Guests:</b> ${g.yes} coming. <b>Waivers:</b> ${g.waiversSigned} of ${g.waiversNeeded} signed.${g.missingWaivers.length ? ` Still needed for: ${esc(g.missingWaivers.join(', '))}. Guests can sign at your invitation link: <a href="${esc(inviteLink(b))}">${esc(inviteLink(b))}</a> (or at the front desk).` : ''}</p>` : ''}`, { label: 'View my booking', url: customerLink(b) }),
           text: `See you tomorrow for ${who(b)}! Please arrive 10–15 minutes early.\n\n${textFacts(b)}\n\n${b.schedule.map((s) => `${s.from} ${s.label}`).join('\n')}`,
         }) ? 1 : 0;
       }
+    }
+
+    // Review requests, the day after the party.
+    const reviewDay = addDays(today, -cfg.reviews.askDaysAfter);
+    for (const b of svc.list({ from: reviewDay, to: reviewDay }).filter((x) => ['confirmed', 'paid'].includes(x.status))) {
+      if (db.prepare('SELECT 1 FROM reviews WHERE booking_id = ?').get(b.id)) continue;
+      n += queue({
+        kind: 'review_request', to: b.email, bookingId: b.id, dedupeKey: `review_request:${b.id}`,
+        subject: `How was ${who(b)}?`,
+        html: wrap('Thanks for celebrating with us!', `<p>Hi ${esc(b.parent_name)}, we hope ${esc(b.child_name || 'everyone')} had a blast. Would you take 30 seconds to tell us how it went?</p>`, { label: 'Leave a quick review', url: `${customerLink(b)}#review` }),
+        text: `Thanks for celebrating with us! How did it go? ${customerLink(b)}#review`,
+      }) ? 1 : 0;
     }
     return n;
   }
@@ -192,6 +301,20 @@ function createNotifier(db, svc, opts = {}) {
     const rows = db.prepare(`SELECT * FROM emails WHERE status IN ('queued','failed') AND attempts < ? ORDER BY id LIMIT 50`).all(MAX_ATTEMPTS);
     let sent = 0;
     for (const e of rows) {
+      if (e.channel === 'sms') {
+        if (!smsSender) {
+          db.prepare(`UPDATE emails SET status = 'not_configured', error = 'Twilio not set up' WHERE id = ?`).run(e.id);
+          continue;
+        }
+        try {
+          const id = await smsSender({ to: e.to_addr, body: e.text });
+          db.prepare(`UPDATE emails SET status = 'sent', provider_id = ?, attempts = attempts + 1, error = NULL, sent_at = datetime('now') WHERE id = ?`).run(id || null, e.id);
+          sent++;
+        } catch (err) {
+          db.prepare(`UPDATE emails SET status = 'failed', attempts = attempts + 1, error = ? WHERE id = ?`).run(String(err.message).slice(0, 500), e.id);
+        }
+        continue;
+      }
       if (!sender) {
         db.prepare(`UPDATE emails SET status = 'not_configured', error = 'RESEND_API_KEY not set' WHERE id = ?`).run(e.id);
         continue;
@@ -213,7 +336,7 @@ function createNotifier(db, svc, opts = {}) {
   }
 
   function list(limit = 200) {
-    return db.prepare(`SELECT id, booking_id, lead_id, kind, to_addr, subject, status, attempts, error, created_at, sent_at FROM emails ORDER BY id DESC LIMIT ?`).all(limit);
+    return db.prepare(`SELECT id, booking_id, lead_id, kind, to_addr, subject, status, attempts, error, created_at, sent_at, channel FROM emails ORDER BY id DESC LIMIT ?`).all(limit);
   }
 
   function get(id) {
@@ -224,12 +347,12 @@ function createNotifier(db, svc, opts = {}) {
   function resend(id) {
     const e = get(id);
     if (!e) return null;
-    db.prepare(`INSERT INTO emails (booking_id, lead_id, kind, to_addr, subject, html, text) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(e.booking_id, e.lead_id, e.kind, e.to_addr, e.subject, e.html, e.text);
+    db.prepare(`INSERT INTO emails (booking_id, lead_id, kind, to_addr, subject, html, text, channel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(e.booking_id, e.lead_id, e.kind, e.to_addr, e.subject, e.html, e.text, e.channel || 'email');
     return true;
   }
 
-  return { onPayment, onLead, queueReminders, flush, tick, list, get, resend, enabled: !!sender };
+  return { onPayment, onLead, onGiftActivated, onReferralCredit, queueReminders, flush, tick, list, get, resend, enabled: !!sender, smsEnabled: !!smsSender };
 }
 
-module.exports = { createNotifier, resendSend };
+module.exports = { createNotifier, resendSend, twilioSend, toE164 };

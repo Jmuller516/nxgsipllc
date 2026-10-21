@@ -51,7 +51,9 @@
     <button id="back" aria-label="Back" disabled>‹</button>
     <button data-go="/calendar" id="navCal">Calendar</button>
     <button data-go="/book" id="navBook">Book</button>
+    <button data-go="SAMPLE_PARTY" id="navParty">Party page</button>
     <button data-go="/chat" id="navChat">Chat</button>
+    <button data-go="/gift-cards" id="navGift">Gift cards</button>
     <button data-go="/admin" id="navAdmin">Admin</button>
   </nav>
 </header>
@@ -71,7 +73,7 @@ __RUNTIME__
   document.getElementById('back').addEventListener('click', () => preview.back());
   let depth = 0;
   preview.onRoute((path) => {
-    const section = path.startsWith('/admin') ? '/admin' : path.startsWith('/chat') ? '/chat' : path.startsWith('/calendar') ? '/calendar' : (path.startsWith('/book') || path.startsWith('/pay') || path.startsWith('/booking')) ? '/book' : '';
+    const section = path.startsWith('/admin') ? '/admin' : path.startsWith('/chat') ? '/chat' : path.startsWith('/gift') || path.startsWith('/pay/demo-gift') ? '/gift-cards' : path.startsWith('/booking') || path.startsWith('/invite') || path.startsWith('/waiver') ? 'SAMPLE_PARTY' : path.startsWith('/calendar') ? '/calendar' : (path.startsWith('/book') || path.startsWith('/pay') || path.startsWith('/booking')) ? '/book' : '';
     navButtons.forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === section)));
     depth++;
     document.getElementById('back').disabled = depth < 2;

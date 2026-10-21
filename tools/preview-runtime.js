@@ -26,6 +26,7 @@
     toString(encoding) {
       if (encoding === 'hex') return [...this].map((x) => x.toString(16).padStart(2, '0')).join('');
       if (encoding === 'base64') return btoa(String.fromCharCode(...this));
+      if (encoding === 'base64url') return btoa(String.fromCharCode(...this)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       return dec.decode(this);
     }
   }
@@ -59,6 +60,7 @@
     existsSync: (p) => fileAt(p) !== undefined,
     statSync: (p) => ({ isFile: () => fileAt(p) !== undefined }),
     createReadStream: (p) => ({ pipe: (res) => res.end(fileAt(p)) }),
+    readFileSync: (p) => { const f = fileAt(p); if (f === undefined) throw new Error('ENOENT ' + p); return f; },
     mkdirSync() {},
   };
 
@@ -179,10 +181,11 @@
     html = html
       .replace(/(?:window\.top\.|window\.)?location\.href\s*=\s*([^;]+);/g, '__nav($1);')
       .replace(/location\.search/g, '__search')
+      .replace(/location\.origin/g, '__origin')
       .replace(/location\.hash/g, '__hash')
       .replace(/history\.replaceState\([^;]*\);/g, '');
     html = html.replace(/\/static\/img\/[\w-]+\.jpg/g, (m) => IMAGES[m] || m);
-    const vars = `<script>var __search = ${JSON.stringify(u.search)}; var __hash = ${JSON.stringify(u.hash)};<\/script>`;
+    const vars = `<script>var __search = ${JSON.stringify(u.search)}; var __hash = ${JSON.stringify(u.hash)}; var __origin = "https://book.nxgs.net";<\/script>`;
     return html.replace(/<head>/i, '<head>' + vars + CHILD_SHIM);
   }
 
@@ -223,7 +226,17 @@
   };
 
   // ---------- sample data so the calendar isn't empty ----------
-  function seed(svc) {
+  function signature() {
+    const c = document.createElement('canvas'); c.width = 300; c.height = 80;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 300, 80);
+    x.strokeStyle = '#0f1b2d'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(20, 55);
+    for (let k = 0; k < 12; k++) x.quadraticCurveTo(30 + k * 22, k % 2 ? 15 : 70, 40 + k * 22, 45);
+    x.stroke();
+    return c.toDataURL('image/png');
+  }
+
+  function seed(app) {
+    const svc = app.svc;
     const today = new Date();
     const ymd = (d) => d.toLocaleDateString('en-CA');
     const days = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
@@ -238,10 +251,28 @@
           email: `${child.toLowerCase()}.${last.toLowerCase().replace(/\W/g, '')}@example.com`, phone: `(516) 555-01${String(10 + i).slice(-2)}`, addOns: opts.addOns || {} });
         svc.recordPayment(b.id, { kind: b.quote.payInFull ? 'full' : 'deposit', method: 'demo', amountCents: b.deposit_cents, stripeSessionId: 'demo_seed_' + i });
         if (opts.paid) svc.recordPayment(b.id, { kind: 'balance', method: 'cash', amountCents: svc.get(b.id).balanceCents });
-      } catch (e) { /* slot taken or too soon — skip */ }
+        const themes = ['soccer', 'baseball', 'basketball', 'softball', 'cheer', 'football', 'lacrosse', 'all-sports'];
+        svc.saveDetails(b.id, opts.details || { theme: themes[i % themes.length] });
+        if (opts.host) svc.setHost(b.id, opts.host);
+        return svc.get(b.id);
+      } catch (e) { return null; /* slot taken or too soon — skip */ }
     };
     const sat1 = nextDow(3, 6), sun1 = nextDow(3, 0), fri1 = nextDow(3, 5);
     const sat2 = nextDow(10, 6), sun2 = nextDow(10, 0), sat3 = nextDow(17, 6), sun3 = nextDow(17, 0), sat4 = nextDow(31, 6);
+    // The showcase party: details filled in, guests replied, some waivers signed.
+    const show = book(sat3, '13:00', { pkg: 'mvp', kids: 16, addOns: { shirts: 16, scoreboard: 1, 'favor-box': 16, pizza: 2 }, host: 'Coach Mike',
+      details: { theme: 'soccer', allergies: 'Liam: tree nuts', jerseyNumber: '7', shirtSizes: { YS: 4, YM: 8, YL: 4 } } });
+    if (show) {
+      sampleBooking = `/booking/${show.ref}?t=${show.token}`;
+      const sig = signature();
+      const guestsList = [['Noah Patel', 'Chris Patel', 'yes', 'none', true], ['Ava Murphy', 'Tara Murphy', 'yes', 'Peanuts', true], ['Mason Russo', 'Mike Russo', 'yes', 'none', false],
+        ['Mia Kim', 'Rob Kim', 'no', '', false], ['Zoe Santos', 'Jess Santos', 'yes', 'Dairy', true], ['Ethan Greco', 'Dana Greco', 'yes', 'none', false], ['Lily Nguyen', 'Kim Nguyen', 'yes', 'none', true]];
+      for (const [child, parent, att, allergy, signed] of guestsList) {
+        const email = `${parent.split(' ')[0].toLowerCase()}@example.com`;
+        app.guests.rsvp(show.invite_token, { childName: child, parentName: parent, email, attending: att, allergies: allergy });
+        if (signed) app.guests.signWaiver({ inviteToken: show.invite_token, childName: child, guardianName: parent, guardianEmail: email, agree: true, typedSignature: parent, signature: sig, medicalNotes: allergy });
+      }
+    }
     book(fri1, '17:00');
     ['10:00', '10:30', '12:30', '13:00', '15:00', '15:30', '17:30', '18:00'].forEach((t) => book(sat1, t)); // fully booked Saturday
     ['11:00', '13:30', '16:00'].forEach((t) => book(sun1, t));
@@ -253,7 +284,10 @@
     svc.addBlock({ date: ymd(sun3), reason: 'Fall tournament' });
     svc.createLead({ eventType: 'corporate', name: 'Karen Lopez', organization: 'Northwell team outing', email: 'klopez@example.com', phone: '(516) 555-0199', preferredDate: ymd(days(24)), groupSize: 45, message: 'Looking for a Friday evening team-building event with food.' });
     svc.createLead({ eventType: 'team', name: 'Coach Dave Romano', organization: 'Massapequa 10U Travel', email: 'coach.dave@example.com', groupSize: 14, message: 'Winter skills clinic, 6 weeks on Sunday mornings.' });
+    const card = app.gifts.createManual({ amount: 100, recipientName: 'Sample gift card', message: 'Use this code to try paying with a gift card' });
+    sampleGiftCode = card.code;
   }
+  let sampleBooking = null, sampleGiftCode = null;
 
   // ---------- chat assistant: runs on in-page Claude (the viewer's own Claude) ----------
   const SAMPLE_MESSAGES = {
@@ -282,15 +316,16 @@
     const { createApp } = load('server');
     const db = load('db').open(':memory:');
     app = createApp(db, { assistantRunner });
-    seed(app.svc);
+    seed(app);
     await app.background();
     document.getElementById('loading').hidden = true;
     const start = (location.hash || '').slice(1);
-    navigate({ book: '/book', admin: '/admin', calendar: '/calendar', chat: '/chat' }[start] || '/calendar');
+    navigate({ book: '/book', admin: '/admin', calendar: '/calendar', chat: '/chat', party: sampleBooking, gifts: '/gift-cards' }[start] || '/calendar');
   }
 
   window.preview = {
-    go: (p) => navigate(p),
+    go: (p) => navigate(p === 'SAMPLE_PARTY' ? sampleBooking : p),
+    giftCode: () => sampleGiftCode,
     back: () => { if (history.length) navigate(history.pop(), 'GET', true); },
     onRoute: (f) => onRoute.push(f),
   };

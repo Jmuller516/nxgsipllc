@@ -127,8 +127,106 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
       error           TEXT,
       updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Guests' replies to a party invitation.
+    CREATE TABLE IF NOT EXISTS rsvps (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      booking_id      INTEGER NOT NULL REFERENCES bookings(id),
+      token           TEXT NOT NULL UNIQUE,      -- lets the guest edit their reply
+      child_name      TEXT NOT NULL,
+      parent_name     TEXT NOT NULL,
+      email           TEXT,
+      phone           TEXT,
+      attending       TEXT NOT NULL,             -- yes | no
+      allergies       TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rsvps_booking ON rsvps(booking_id);
+
+    -- Signed liability waivers (one per child per guardian, valid for a set time).
+    CREATE TABLE IF NOT EXISTS waivers (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      waiver_version  TEXT NOT NULL,             -- fingerprint of the waiver text that was signed
+      booking_id      INTEGER REFERENCES bookings(id),
+      child_name      TEXT NOT NULL,
+      child_birthdate TEXT,
+      guardian_name   TEXT NOT NULL,
+      guardian_email  TEXT NOT NULL,
+      guardian_phone  TEXT,
+      emergency_name  TEXT,
+      emergency_phone TEXT,
+      medical_notes   TEXT,
+      typed_signature TEXT NOT NULL,
+      signature_media TEXT,                      -- drawn signature image (media id)
+      ip              TEXT,
+      user_agent      TEXT,
+      signed_at       TEXT NOT NULL,
+      expires_at      TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_waivers_lookup ON waivers(guardian_email, child_name);
+
+    -- Gift cards and referral credits (credits are gift cards with kind = 'referral').
+    CREATE TABLE IF NOT EXISTS gift_cards (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      code            TEXT NOT NULL UNIQUE,
+      kind            TEXT NOT NULL,             -- purchase | referral | manual
+      status          TEXT NOT NULL,             -- pending | active | void
+      initial_cents   INTEGER NOT NULL,
+      buyer_name      TEXT,
+      buyer_email     TEXT,
+      recipient_name  TEXT,
+      recipient_email TEXT,
+      message         TEXT,
+      source_booking_id INTEGER,                 -- referral credits: the booking that earned it
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      activated_at    TEXT
+    );
+    -- Money taken off a gift card. 'held' while a booking waits for its card payment.
+    CREATE TABLE IF NOT EXISTS gift_card_uses (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      gift_card_id    INTEGER NOT NULL REFERENCES gift_cards(id),
+      booking_id      INTEGER NOT NULL REFERENCES bookings(id),
+      amount_cents    INTEGER NOT NULL,
+      status          TEXT NOT NULL,             -- held | used | released
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS gift_sessions (
+      session_id      TEXT PRIMARY KEY,
+      gift_card_id    INTEGER NOT NULL REFERENCES gift_cards(id),
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Reviews parents leave after their party.
+    CREATE TABLE IF NOT EXISTS reviews (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      booking_id      INTEGER NOT NULL UNIQUE REFERENCES bookings(id),
+      rating          INTEGER NOT NULL,
+      comment         TEXT,
+      display_name    TEXT,
+      may_publish     INTEGER NOT NULL DEFAULT 0,  -- the parent agreed it can be shown
+      approved        INTEGER NOT NULL DEFAULT 0,  -- staff approved it for the website
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+
+  // Upgrades for databases created by earlier versions.
+  addColumn(db, 'bookings', 'theme', 'TEXT');
+  addColumn(db, 'bookings', 'host_name', 'TEXT');
+  addColumn(db, 'bookings', 'invite_token', 'TEXT');
+  addColumn(db, 'bookings', 'details_json', 'TEXT');
+  addColumn(db, 'bookings', 'sms_opt_in', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'bookings', 'referral_code', 'TEXT');
+  addColumn(db, 'bookings', 'referred_by', 'INTEGER');
+  addColumn(db, 'emails', 'channel', "TEXT NOT NULL DEFAULT 'email'");
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_invite ON bookings(invite_token)');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_referral ON bookings(referral_code)');
   return db;
+}
+
+function addColumn(db, table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 module.exports = { open };

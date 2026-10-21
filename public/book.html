@@ -39,6 +39,8 @@
       <label for="kids">How many kids?</label>
       <input id="kids" name="kids" type="number" min="1" value="15" inputmode="numeric">
       <p class="muted" id="kidsHint"></p>
+      <label for="theme">Sport theme <span class="muted">(you can change it later)</span></label>
+      <select id="theme"><option value="">Choose later</option></select>
     </div>
 
     <div class="card">
@@ -71,11 +73,15 @@
       </div>
       <label for="notes">Anything we should know? <span class="muted">(allergies, theme…)</span></label>
       <textarea id="notes" rows="3"></textarea>
+      <label class="check"><input type="checkbox" id="smsOptIn"> Text me reminders about my party (confirmation, balance due, day-before). Msg & data rates may apply. Reply STOP to opt out.</label>
     </div>
 
     <div class="card">
       <h2 style="margin-top:0">Summary</h2>
       <table class="receipt" id="summary"><tr><td class="muted">Choose a package and date to see your price.</td></tr></table>
+      <details id="codeBox" style="margin-top:10px"><summary class="muted" style="cursor:pointer">Have a gift card or referral code?</summary>
+        <div class="linkbox" style="margin-top:8px"><input id="code" placeholder="Enter code" autocomplete="off" style="border:0;background:transparent;padding:4px;text-transform:uppercase"><button class="btn small" type="button" id="applyCode">Apply</button></div>
+        <p class="muted small" id="codeMsg"></p></details>
       <p class="muted" id="policy"></p>
       <div id="formError" class="error hidden" role="alert"></div>
       <div class="actions"><button class="btn" id="payBtn" type="submit" disabled>Continue to payment</button></div>
@@ -203,6 +209,9 @@ async function init() {
   $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
+  $('theme').innerHTML += CFG.themes.map((t) => `<option value="${t.id}">${t.emoji} ${t.name}</option>`).join('');
+  $('applyCode').onclick = () => { appliedCode = $('code').value.trim().toUpperCase(); scheduleQuote(); };
+  if (params.get('code')) { $('code').value = params.get('code'); appliedCode = params.get('code').toUpperCase(); $('codeBox').open = true; }
   // Coming from the calendar: fill in the date and time they picked.
   if (/^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '')) {
     $('date').value = params.get('date');
@@ -241,6 +250,7 @@ function formData() {
     kids: Number($('kids').value), partyDate: $('date').value, time: selectedTime, addOns,
     childName: $('childName').value, childAge: $('childAge').value, parentName: $('parentName').value,
     email: $('email').value, phone: $('phone').value, notes: $('notes').value,
+    theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
   };
 }
 
@@ -271,6 +281,7 @@ function updateAddonCounts() {
   });
 }
 
+let appliedCode = '';
 async function updateQuote() {
   const f = formData();
   const pkg = CFG.packages.find((p) => p.id === f.packageId);
@@ -279,16 +290,20 @@ async function updateQuote() {
   if (!f.partyDate) { $('payBtn').disabled = true; return; }
   try {
     const q = await api('/api/quote', f);
-    const rows = q.lines.map((l) => `<tr><td>${l.name}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('');
+    const rows = q.lines.map((l) => `<tr${l.kind === 'discount' ? ' class="yes"' : ''}><td>${l.name}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('');
+    const due = q.dueTodayCents ?? q.depositCents;
     $('summary').innerHTML = rows +
       `<tr class="sub"><td>Subtotal</td><td class="num">${money(q.subtotalCents)}</td></tr>` +
       `<tr class="sub"><td>${CFG.tax.label}</td><td class="num">${money(q.taxCents)}</td></tr>` +
       `<tr class="total"><td>Total</td><td class="num">${money(q.totalCents)}</td></tr>` +
-      `<tr class="due"><td>${q.payInFull ? 'Due today (paid in full)' : `Due today (${CFG.payments.depositPercent}% deposit)`}</td><td class="num">${money(q.depositCents)}</td></tr>` +
+      (q.gift ? `<tr><td>${q.payInFull ? 'Payment' : `${CFG.payments.depositPercent}% deposit`}</td><td class="num">${money(q.depositCents)}</td></tr><tr class="yes"><td>Gift card ${q.gift.code}</td><td class="num">−${money(q.gift.applyCents)}</td></tr>` : '') +
+      `<tr class="due"><td>${q.gift ? 'Due today' : q.payInFull ? 'Due today (paid in full)' : `Due today (${CFG.payments.depositPercent}% deposit)`}</td><td class="num">${money(due)}</td></tr>` +
       (q.payInFull ? '' : `<tr><td class="muted">Balance due by ${new Date(q.balanceDueDate + 'T12:00').toLocaleDateString()}</td><td class="num muted">${money(q.balanceCents)}</td></tr>`);
     $('payBtn').disabled = !selectedTime;
-    $('payBtn').textContent = selectedTime ? `Pay ${money(q.depositCents)} and reserve` : 'Pick a start time';
+    $('payBtn').textContent = selectedTime ? (due > 0 ? `Pay ${money(due)} and reserve` : 'Reserve with gift card') : 'Pick a start time';
+    $('codeMsg').textContent = q.referral ? `Referral code applied: ${money(CFG.referral.friendDiscountCents)} off.` : q.gift ? `Gift card applied. ${money(q.gift.balanceCents - q.gift.applyCents)} will stay on the card.` : '';
   } catch (e) {
+    if (appliedCode) { $('codeMsg').textContent = e.message; appliedCode = ''; scheduleQuote(); return; }
     $('payBtn').disabled = true;
     $('formError').textContent = e.message; $('formError').classList.remove('hidden');
   }

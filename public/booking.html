@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your NXGS Party</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+<main id="app"><p class="muted">Loading your booking…</p></main>
+
+<script src="/static/waiver.js"></script>
+<script>
+const REF = "__BOOKING_REF__";
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('t') || '';
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const api = async (path, body) => {
+  const r = await fetch(`/api/bookings/${REF}${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+  return d;
+};
+let B, CFG;
+
+async function load() {
+  try {
+    [B, CFG] = await Promise.all([api(params.get('session_id') ? `?session_id=${encodeURIComponent(params.get('session_id'))}` : ''), fetch('/api/config').then((r) => r.json())]);
+  } catch (e) {
+    $('app').innerHTML = '<div class="card"><h1>Booking not found</h1><p>Please use the link from your confirmation email, or contact us.</p></div>';
+    return;
+  }
+  render();
+  const want = (location.hash || '').slice(1);
+  if (want && $(want)) setTimeout(() => $(want).scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+}
+
+function render() {
+  const active = ['confirmed', 'paid'].includes(B.status);
+  const statusText = {
+    pending: 'Waiting for payment. Your time is held for a short while.',
+    confirmed: 'Confirmed. Deposit received.',
+    paid: 'Confirmed. Paid in full.',
+    cancelled: 'Cancelled.',
+    expired: 'This hold expired before payment. Please book again or contact us.',
+  }[B.status];
+  const st = B.detailsStatus;
+  const invite = B.inviteToken ? `${location.origin}/invite/${B.inviteToken}` : null;
+  const g = B.guests;
+
+  $('app').innerHTML = `
+    <figure class="hero"><img src="/static/img/lobby.jpg" alt="NXGS front desk and lobby"><figcaption>Rendering · NXGS Farmingdale</figcaption></figure>
+    ${params.get('paid') ? '<p class="banner ok">Payment received. Thank you!</p>' : ''}
+    <p class="eyebrow">${esc(CFG.business.name)} · Booking ${esc(B.ref)}</p>
+    <h1>${B.themeInfo ? B.themeInfo.emoji + ' ' : ''}${B.childName ? `${esc(B.childName)}’s party` : 'Your party'}</h1>
+    <p class="status status-${esc(B.status)}">${esc(statusText)}</p>
+
+    <div class="card">
+      <dl class="facts" style="margin-top:0">
+        <dt>Date</dt><dd>${esc(fmtDate(B.partyDate))}</dd>
+        <dt>Time</dt><dd>${esc(B.timeLabel)} – ${esc(B.endLabel)}</dd>
+        <dt>Package</dt><dd>${esc(B.packageName)}</dd>
+        <dt>Kids</dt><dd>${B.kids}</dd>
+        ${B.themeInfo ? `<dt>Theme</dt><dd>${B.themeInfo.emoji} ${esc(B.themeInfo.name)}</dd>` : ''}
+      </dl>
+      <h2>Schedule</h2>
+      <ul class="schedule">${B.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
+    </div>
+
+    ${active ? `
+    <div class="card" id="details">
+      <div class="card-head"><h2>Party details</h2>${st.complete ? '<span class="badge ok">Complete ✓</span>' : `<span class="badge warn">${st.missing.length} to go</span>`}</div>
+      ${st.complete ? '' : `<p class="muted">Still needed: ${esc(st.missing.join(', '))}.</p>`}
+      <form id="detailsForm" novalidate>
+        <label for="dTheme">Sport theme</label>
+        <select id="dTheme"><option value="">Choose a theme…</option>${CFG.themes.map((t) => `<option value="${t.id}" ${B.theme === t.id ? 'selected' : ''}>${t.emoji} ${esc(t.name)}</option>`).join('')}</select>
+        <div class="row">
+          <div><label for="dName">Birthday child’s name <span class="muted">(exact spelling)</span></label><input id="dName" value="${esc(B.childName || '')}"></div>
+          <div><label for="dAge">Turning</label><input id="dAge" type="number" min="1" max="18" inputmode="numeric" value="${esc(B.childAge || '')}"></div>
+        </div>
+        ${st.needs.jerseyNumber ? `<label for="dJersey">Jersey number <span class="muted">(for personalized items)</span></label><input id="dJersey" inputmode="numeric" maxlength="2" value="${esc(B.details.jerseyNumber || '')}" style="max-width:120px">` : ''}
+        ${st.needs.shirtSizes ? `<label>Shirt sizes <span class="muted" id="sizeCount"></span></label>
+          <div class="sizes">${CFG.shirtSizes.map((z) => `<label>${z}<input type="number" min="0" inputmode="numeric" data-size="${z}" value="${(B.details.shirtSizes || {})[z] || ''}"></label>`).join('')}</div>` : ''}
+        ${st.needs.photo ? `<label for="dPhoto">Photo of the birthday child <span class="muted">(for the scoreboard, poster or favor boxes)</span></label>
+          ${B.details.photo ? `<img class="photo-prev" id="photoPrev" src="${esc(B.details.photo)}" alt="Uploaded photo">` : '<img class="photo-prev hidden" id="photoPrev" alt="Uploaded photo">'}
+          <input id="dPhoto" type="file" accept="image/jpeg,image/png,image/webp">` : ''}
+        <label for="dAllergies">Food allergies in the group <span class="muted">(write “none” if none)</span></label>
+        <textarea id="dAllergies" rows="2">${esc(B.details.allergies || '')}</textarea>
+        <label for="dNotes">Anything else? <span class="muted">(optional)</span></label>
+        <textarea id="dNotes" rows="2">${esc(B.details.extraNotes || '')}</textarea>
+        <div id="dMsg" class="hidden"></div>
+        <div class="actions"><button class="btn" type="submit">Save details</button></div>
+      </form>
+    </div>
+
+    <div class="card" id="invites">
+      <div class="card-head"><h2>Invitations & waivers</h2><span class="badge ${g.missingWaivers.length ? 'warn' : 'ok'}">${g.waiversSigned} of ${g.waiversNeeded} waivers</span></div>
+      <p>Send this link to your guests. They RSVP, list allergies, and sign the waiver online, so check-in is quick.</p>
+      <div class="linkbox"><code id="inviteUrl">${esc(invite)}</code><button class="btn small" id="copyInvite" type="button">Copy</button></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn ghost small" id="shareInvite" type="button">Share…</button>
+        <a class="btn ghost small" href="/invite/${esc(B.inviteToken)}" target="_blank" rel="noopener">Preview invitation</a>
+      </div>
+      <p><b>${g.yes}</b> coming · ${g.no} can’t make it · ${B.kids} kids booked${g.yes + 1 > B.kids ? ` · <span class="no">More guests than booked kids. Extra kids are ${money(CFG.packages.find((p) => p.id === B.packageId)?.extraKidCents || 2500)} each, settled at check-in.</span>` : ''}</p>
+      ${g.birthdayChild && !g.birthdayChild.waiver ? `<p class="banner">${esc(g.birthdayChild.name)} needs a waiver too. <a href="/waiver?party=${esc(B.inviteToken)}&child=${encodeURIComponent(g.birthdayChild.name)}">Sign it now</a></p>` : ''}
+      ${g.guests.length ? `<div class="scroll"><table class="guest-list"><tr><th>Guest</th><th>Reply</th><th>Allergies</th><th>Waiver</th></tr>
+        ${g.guests.map((x) => `<tr><td><b>${esc(x.childName)}</b><br><span class="muted">${esc(x.parentName)}</span></td>
+          <td class="${x.attending === 'yes' ? 'yes' : 'no'}">${x.attending === 'yes' ? 'Coming' : 'Can’t come'}</td>
+          <td>${esc(x.allergies || '—')}</td><td>${x.attending === 'yes' ? (x.waiver ? '<span class="yes">✓ Signed</span>' : '<span class="no">Not yet</span>') : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No replies yet.</p>'}
+    </div>` : ''}
+
+    <div class="card" id="pay">
+      <h2 style="margin-top:0">Receipt</h2>
+      <table class="receipt">
+        ${B.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ` × ${l.qty}` : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('')}
+        <tr class="sub"><td>Subtotal</td><td class="num">${money(B.quote.subtotalCents)}</td></tr>
+        <tr><td>${esc(CFG.tax.label)}</td><td class="num">${money(B.quote.taxCents)}</td></tr>
+        <tr class="total"><td>Total</td><td class="num">${money(B.totalCents)}</td></tr>
+        ${B.payments.map((x) => `<tr><td>${esc(x.date)} · ${esc(x.kind)} (${esc(x.method.replace(/_/g, ' '))})</td><td class="num">−${money(x.amountCents)}</td></tr>`).join('')}
+        <tr class="total"><td>Balance</td><td class="num">${money(B.balanceCents)}</td></tr>
+      </table>
+      ${B.status === 'confirmed' && B.balanceCents > 0 ? `
+        <p class="muted">Balance due by ${esc(fmtDate(B.balanceDueDate))}.</p>
+        <div class="actions"><button class="btn" id="payBalance">Pay balance ${money(B.balanceCents)}</button></div>
+        <details><summary class="muted" style="cursor:pointer">Use a gift card or party credit</summary>
+          <div class="linkbox" style="margin-top:8px"><input id="giftCode" placeholder="Code, e.g. NXGC-ABCD-EFGH" style="border:0;background:transparent;padding:4px"><button class="btn small" id="applyGift" type="button">Apply</button></div>
+          <p id="giftMsg" class="muted"></p></details>` : ''}
+      <p class="muted">The ${CFG.payments.depositPercent}% deposit is non-refundable.</p>
+    </div>
+
+    ${B.referralCode ? `
+    <div class="card">
+      <h2 style="margin-top:0">Share the fun, earn party credit</h2>
+      <p>Give your code to another family. They get <b>${money(CFG.referral.friendDiscountCents)} off</b> their party, and you get <b>${money(CFG.referral.referrerCreditCents)}</b> in party credit when they book.</p>
+      <div class="linkbox"><code class="code-big" id="refCode">${esc(B.referralCode)}</code><button class="btn small" id="copyRef" type="button">Copy</button></div>
+    </div>` : ''}
+
+    ${B.canReview ? `
+    <div class="card" id="review">
+      <h2 style="margin-top:0">How was the party?</h2>
+      ${B.review ? `<p>Thanks for your review! You gave us ${'★'.repeat(B.review.rating)}.</p>` : `
+      <form id="reviewForm" novalidate>
+        <div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`).join('')}</div>
+        <label for="rComment">Tell us about it <span class="muted">(optional)</span></label><textarea id="rComment" rows="3"></textarea>
+        <label for="rName">Name to show <span class="muted">(e.g. “Dana R.”)</span></label><input id="rName" value="${esc(B.parentFirstName)}">
+        <label class="check"><input type="checkbox" id="rPublish"> NXGS may share my review on its website.</label>
+        <div id="rMsg" class="hidden"></div>
+        <div class="actions"><button class="btn" type="submit">Send review</button></div>
+      </form>`}
+    </div>` : ''}
+
+    <p class="muted">Questions? Email <a href="mailto:${esc(CFG.business.email || 'joseph@nxgs.net')}">${esc(CFG.business.email || 'joseph@nxgs.net')}</a>${CFG.business.phone ? ` or call ${esc(CFG.business.phone)}` : ''}. Keep this page’s link. It’s your receipt and party hub.</p>`;
+  wire();
+}
+
+function copy(text, btn) {
+  const done = () => { btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = 'Copy'; }, 1800); };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done);
+  else done();
+}
+
+function shrink(file, max = 1400) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => reject(new Error('That file could not be read as a photo.'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function wire() {
+  const st = B.detailsStatus;
+  if ($('copyInvite')) $('copyInvite').onclick = (e) => copy($('inviteUrl').textContent, e.target);
+  if ($('shareInvite')) $('shareInvite').onclick = () => {
+    const url = $('inviteUrl').textContent;
+    const text = `You're invited to ${B.childName ? B.childName + "'s" : 'our'} party at NXGS! RSVP and sign the waiver here:`;
+    if (navigator.share) navigator.share({ title: 'Party invitation', text, url }).catch(() => {});
+    else copy(url, $('copyInvite'));
+  };
+  if ($('copyRef')) $('copyRef').onclick = (e) => copy(B.referralCode, e.target);
+
+  const sizeInputs = [...document.querySelectorAll('[data-size]')];
+  const updateCount = () => {
+    if (!$('sizeCount')) return;
+    const n = sizeInputs.reduce((s, i) => s + (Number(i.value) || 0), 0);
+    $('sizeCount').textContent = `(${n} of ${st.needs.shirtSizes})`;
+    $('sizeCount').style.color = n === st.needs.shirtSizes ? 'var(--ok)' : '';
+  };
+  sizeInputs.forEach((i) => i.addEventListener('input', updateCount)); updateCount();
+
+  let photoData = null;
+  if ($('dPhoto')) $('dPhoto').onchange = async () => {
+    const f = $('dPhoto').files[0];
+    if (!f) return;
+    try { photoData = await shrink(f); $('photoPrev').src = photoData; $('photoPrev').classList.remove('hidden'); } catch (e) { alert(e.message); }
+  };
+
+  if ($('detailsForm')) $('detailsForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const body = { theme: $('dTheme').value || undefined, childName: $('dName').value, childAge: $('dAge').value, allergies: $('dAllergies').value, extraNotes: $('dNotes').value };
+    if ($('dJersey')) body.jerseyNumber = $('dJersey').value;
+    if (sizeInputs.length) body.shirtSizes = Object.fromEntries(sizeInputs.map((i) => [i.dataset.size, Number(i.value) || 0]));
+    if (photoData) body.photoDataUrl = photoData;
+    try {
+      B = await api('/details', body);
+      render();
+      $('details').scrollIntoView({ block: 'start' });
+      const m = $('dMsg'); m.className = 'banner ok'; m.textContent = B.detailsStatus.complete ? 'Saved. Everything we need is in!' : 'Saved.';
+    } catch (err) {
+      const m = $('dMsg'); m.className = 'error'; m.textContent = err.message;
+      btn.disabled = false; btn.textContent = 'Save details';
+    }
+  };
+
+  if ($('payBalance')) $('payBalance').onclick = async (e) => {
+    e.target.disabled = true;
+    try { const d = await api('/pay-balance', {}); location.href = d.checkoutUrl; } catch (err) { alert(err.message); e.target.disabled = false; }
+  };
+  if ($('applyGift')) $('applyGift').onclick = async () => {
+    try {
+      const d = await api('/gift-card', { code: $('giftCode').value });
+      B = d.booking; render();
+      $('pay').scrollIntoView({ block: 'start' });
+    } catch (err) { $('giftMsg').textContent = err.message; }
+  };
+
+  let rating = 0;
+  document.querySelectorAll('[data-star]').forEach((s) => s.onclick = () => {
+    rating = Number(s.dataset.star);
+    document.querySelectorAll('[data-star]').forEach((x) => x.classList.toggle('on', Number(x.dataset.star) <= rating));
+  });
+  if ($('reviewForm')) $('reviewForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('/review', { rating, comment: $('rComment').value, displayName: $('rName').value, mayPublish: $('rPublish').checked });
+      $('review').innerHTML = `<h2 style="margin-top:0">Thank you!</h2><p>We really appreciate it.</p>${r.googleReviewUrl ? `<p>Would you also share it on Google? It helps other families find us.</p><a class="btn" href="${esc(r.googleReviewUrl)}" target="_blank" rel="noopener">Review us on Google</a>` : ''}`;
+    } catch (err) { const m = $('rMsg'); m.className = 'error'; m.textContent = err.message; }
+  };
+}
+
+load();
+</script>
+</body>
+</html>

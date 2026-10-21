@@ -112,9 +112,23 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
   }
 
+  /** A referral code from a family that already booked, or null. */
+  function findReferral(code, email) {
+    const c = String(code || '').trim().toUpperCase();
+    if (!c) return null;
+    const r = db.prepare(`SELECT id, email FROM bookings WHERE referral_code = ? AND status IN ('confirmed','paid')`).get(c);
+    if (!r) return null;
+    if (email && r.email === String(email).trim().toLowerCase()) throw new BookingError("You can't use your own referral code. Share it with friends!");
+    return { bookingId: r.id, code: c };
+  }
+
   function quoteFor(input) {
     const today = validateDate(input.partyDate);
-    return pricing.quote({ ...input, today }, cfg);
+    const ref = findReferral(input.code, input.email);
+    const discount = ref ? { cents: cfg.referral.friendDiscountCents, label: `Referral discount (${ref.code})`, code: ref.code } : null;
+    const q = pricing.quote({ ...input, today, discount }, cfg);
+    if (ref) q.referral = ref;
+    return q;
   }
 
   /** Create a pending booking that holds the slot while the customer pays. */
@@ -137,15 +151,19 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
       const ref = makeRef();
       const token = crypto.randomBytes(16).toString('hex');
+      const inviteToken = crypto.randomBytes(9).toString('base64url');
+      const theme = cfg.themes.some((t) => t.id === input.theme) ? input.theme : null;
       const holdExpires = new Date(clock().getTime() + cfg.payments.holdMinutes * 60000).toISOString();
       const info = db.prepare(`
         INSERT INTO bookings (ref, token, status, party_date, start_min, package_id, kids, child_name, child_age,
-          parent_name, email, phone, notes, quote_json, total_cents, deposit_cents, balance_due_date, hold_expires_at)
-        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          parent_name, email, phone, notes, quote_json, total_cents, deposit_cents, balance_due_date, hold_expires_at,
+          invite_token, theme, sms_opt_in, referred_by)
+        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(ref, token, input.partyDate, start, q.packageId, q.kids,
         clean(input.childName), input.childAge ? Number(input.childAge) : null,
         clean(input.parentName), clean(input.email).toLowerCase(), clean(input.phone), clean(input.notes),
-        JSON.stringify(q), q.totalCents, q.depositCents, q.balanceDueDate, holdExpires);
+        JSON.stringify(q), q.totalCents, q.depositCents, q.balanceDueDate, holdExpires,
+        inviteToken, theme, input.smsOptIn ? 1 : 0, q.referral ? q.referral.bookingId : null);
       db.exec('COMMIT');
       return get(Number(info.lastInsertRowid));
     } catch (e) {
@@ -159,6 +177,21 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
   }
   function getByRef(ref) {
     return decorate(db.prepare('SELECT * FROM bookings WHERE ref = ?').get(ref));
+  }
+  function getByInvite(token) {
+    return decorate(db.prepare('SELECT * FROM bookings WHERE invite_token = ?').get(String(token || '')));
+  }
+
+  function makeReferralCode(b) {
+    const base = (String(b.child_name || '').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 6)) || 'NXGS';
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let i = 0; i < 10; i++) {
+      let tail = '';
+      for (const x of crypto.randomBytes(4)) tail += alphabet[x % alphabet.length];
+      const code = `${base}-${tail}`;
+      if (!db.prepare('SELECT 1 FROM bookings WHERE referral_code = ?').get(code)) return code;
+    }
+    return `NXGS-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -182,6 +215,9 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
       const status = b.status === 'cancelled' ? 'cancelled' : paid >= b.total_cents ? 'paid' : 'confirmed';
       db.prepare(`UPDATE bookings SET paid_cents = ?, status = ?, hold_expires_at = NULL, updated_at = datetime('now') WHERE id = ?`)
         .run(paid, status, bookingId);
+      if (!b.referral_code && status !== 'cancelled') {
+        db.prepare('UPDATE bookings SET referral_code = ? WHERE id = ?').run(makeReferralCode(b), bookingId);
+      }
       db.exec('COMMIT');
       const booking = get(bookingId);
       fire('onPayment', booking, db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(pinfo.lastInsertRowid)));
@@ -200,7 +236,72 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
   /** Mark unpaid holds past their time as expired so they free the slot. */
   function expireHolds() {
-    return db.prepare(`UPDATE bookings SET status = 'expired', updated_at = datetime('now') WHERE status = 'pending' AND hold_expires_at <= ?`).run(nowIso()).changes;
+    const expired = db.prepare(`SELECT id FROM bookings WHERE status = 'pending' AND hold_expires_at <= ?`).all(nowIso());
+    if (!expired.length) return 0;
+    db.prepare(`UPDATE bookings SET status = 'expired', updated_at = datetime('now') WHERE status = 'pending' AND hold_expires_at <= ?`).run(nowIso());
+    for (const e of expired) fire('onExpire', e.id);
+    return expired.length;
+  }
+
+  // ---- Party details the parent fills in after booking ----
+  function detailsNeeded(b) {
+    const qty = (id) => (b.quote.lines.find((l) => l.id === id)?.qty || 0);
+    const needs = { theme: true, childName: true, childAge: true, allergies: true };
+    if (qty('shirts')) needs.shirtSizes = qty('shirts');
+    if (cfg.details.needsPhoto.some((id) => qty(id))) needs.photo = true;
+    if (cfg.details.needsJerseyNumber.some((id) => qty(id))) needs.jerseyNumber = true;
+    return needs;
+  }
+
+  function detailsStatus(b) {
+    const d = b.details || {};
+    const needs = detailsNeeded(b);
+    const missing = [];
+    if (!b.theme) missing.push('sport theme');
+    if (!b.child_name) missing.push("birthday child's name");
+    if (!b.child_age) missing.push('age');
+    if (d.allergiesConfirmed !== true) missing.push('allergies (or "none")');
+    if (needs.shirtSizes) {
+      const total = Object.values(d.shirtSizes || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+      if (total !== needs.shirtSizes) missing.push(`shirt sizes for all ${needs.shirtSizes} shirts`);
+    }
+    if (needs.photo && !d.photo) missing.push('photo of the birthday child');
+    if (needs.jerseyNumber && !d.jerseyNumber) missing.push('jersey number');
+    return { needs, missing, complete: missing.length === 0 };
+  }
+
+  function saveDetails(bookingId, input) {
+    const b = get(bookingId);
+    if (!b) throw new BookingError('Booking not found.');
+    if (['cancelled', 'expired'].includes(b.status)) throw new BookingError('This booking is no longer active.');
+    if (input.theme && !cfg.themes.some((t) => t.id === input.theme)) throw new BookingError('Choose a theme from the list.');
+    const d = { ...(b.details || {}) };
+    if (input.allergies !== undefined) { d.allergies = clean(input.allergies); d.allergiesConfirmed = true; }
+    if (input.jerseyNumber !== undefined) {
+      const n = String(input.jerseyNumber ?? '').trim();
+      if (n && !/^\d{1,2}$/.test(n)) throw new BookingError('Jersey number should be 0 to 99.');
+      d.jerseyNumber = n || null;
+    }
+    if (input.shirtSizes !== undefined) {
+      const sizes = {};
+      for (const [k, v] of Object.entries(input.shirtSizes || {})) {
+        if (!cfg.details.shirtSizes.includes(k)) continue;
+        const n = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+        if (n) sizes[k] = n;
+      }
+      d.shirtSizes = sizes;
+    }
+    if (input.photo !== undefined) d.photo = input.photo || null;   // media path, set by the server
+    if (input.extraNotes !== undefined) d.extraNotes = clean(input.extraNotes);
+    const childAge = input.childAge === undefined ? b.child_age : (input.childAge ? Math.max(1, Math.min(99, Math.round(Number(input.childAge)))) : null);
+    db.prepare(`UPDATE bookings SET details_json = ?, theme = COALESCE(?, theme), child_name = COALESCE(?, child_name), child_age = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(JSON.stringify(d), input.theme || null, clean(input.childName), childAge, bookingId);
+    return get(bookingId);
+  }
+
+  function setHost(bookingId, name) {
+    db.prepare(`UPDATE bookings SET host_name = ?, updated_at = datetime('now') WHERE id = ?`).run(clean(name), bookingId);
+    return get(bookingId);
   }
 
   function list({ from, to, status } = {}) {
@@ -223,8 +324,11 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     const pkg = cfg.packages.find((p) => p.id === b.package_id);
     const today = todayLocal(clock(), cfg.business.timezone);
     const balanceCents = Math.max(0, b.total_cents - b.paid_cents);
+    const theme = cfg.themes.find((t) => t.id === b.theme) || null;
     return {
       ...b,
+      details: b.details_json ? JSON.parse(b.details_json) : {},
+      themeInfo: theme,
       quote,
       packageName: pkg ? pkg.name : b.package_id,
       timeLabel: scheduling.label12(b.start_min),
@@ -288,7 +392,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   }
 
-  return { calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+  return { findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
 }
 
 function clean(v) {

@@ -9,6 +9,17 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 
 - **Chat assistant "Riley"**: a chat bubble on the booking and calendar pages, and a full-page version at `/chat`. It answers questions in a friendly, texting style, checks real availability, quotes exact prices, and books the party, then shows a secure button to pay the deposit. It never takes card numbers in chat. It's labeled as a virtual assistant and, if asked, says it's an AI and offers a call-back from staff. It can also send group/corporate requests and staff follow-ups to your Leads.
 
+**After booking: the family's party page** (`/booking/…`, linked from every email)
+- **Party details form**: sport theme, exact name spelling, age, allergies, plus whatever the chosen add-ons need (shirt sizes, jersey number, a photo of the birthday child for the scoreboard, poster or favor boxes). It shows a "complete" badge, and a reminder email goes out 10 days before if anything is missing.
+- **Digital invitation**: a link to share by text, email or social media. Guests see the date, time, theme and schedule, add it to their calendar, RSVP with allergies, and sign the waiver right there. The family sees who's coming and whose waiver is missing.
+- **Gift cards and party credit** can pay the balance.
+- **Referral code**: friends get money off their party, and the family gets party credit when they book.
+- **Review** the day after the party.
+
+**Waivers** (`/waiver`): a liability waiver with a finger-drawn signature, valid for a year per child. Guests sign from the invitation. Walk-ins sign on a front-desk tablet at `/waiver`. ⚠️ The waiver text is a **sample** until you paste in your attorney's or insurer's version (Admin → Settings).
+
+**Gift cards** (`/gift-cards`): buy online, delivered by email, with a balance check.
+
 **Booking form** (`/book`)
 - Pick a kids party package and number of kids (15 included, $25 each extra, max 20)
 - See only the start times that are actually open. The scheduler enforces:
@@ -32,8 +43,13 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - **What's included**: every package and add-on lists exactly what the customer gets, as bullet points on the package cards and behind a "What's included" link on each add-on. Edit the lists on the Pricing tab, one item per line. Riley uses the same lists when answering questions.
 - **Product photos**: every add-on shows a photo on the booking page, and customers can tap it to see it larger. Each item starts with an illustration. Upload the real product photo from the Pricing tab (**Add photo** on any item, right from your phone). Photos are resized automatically and kept when you reset prices.
 - **Pricing tab**: change any price, cost, minimum, lead time, deposit %, balance due days or tax rate, and turn items on/off. No code changes needed, and add-on margins show as you type.
+- **Run sheet** (`/admin/runsheet`, or the button on any calendar day): one printable page per day with each party's host, schedule, theme, add-ons, shirt sizes, allergies in red, balance to collect, and a check-in list showing who still needs a waiver, plus that day's vendor deliveries.
+- **Host assignment** on every party.
+- **Waivers tab**: search signed waivers and view each one with its signature.
+- **Gift cards tab**: every gift card and referral credit with its balance. Issue a card yourself (for example as an apology or a raffle prize) or void one.
+- **Reviews tab**: approve which reviews may appear on the website. Only reviews the parent allowed can be shown.
 - **Chats tab**: every chat conversation, with which ones turned into bookings or leads.
-- **Emails tab**: every email sent (or that would be sent), with a preview and a resend button. Staff get alerts for new parties, new leads and overdue balances.
+- **Messages tab** (emails and texts): every email sent (or that would be sent), with a preview and a resend button. Staff get alerts for new parties, new leads and overdue balances.
 - **Settings tab**: connect QuickBooks Online. Every payment (Stripe or desk) becomes a Sales Receipt under the customer.
 - CSV exports for bookings and payments. The payments CSV is laid out for QuickBooks Online import.
 
@@ -51,7 +67,7 @@ You need **Node.js 22.13 or newer**. There are no other dependencies, so you don
 
 ```bash
 npm run demo     # admin password "demo", payments simulated
-npm test         # 31 automated tests
+npm test         # 40 automated tests
 node tools/build-preview.js   # one-file clickable preview (preview.html)
 ```
 
@@ -68,6 +84,7 @@ Then open http://localhost:3000/book and http://localhost:3000/admin.
 | `PORT` | Defaults to 3000 |
 | `DB_FILE` | Where bookings are stored. Defaults to `data/nxgs.db`. **Back this file up.** |
 | `EMBED_ORIGINS` | Sites allowed to embed the booking page, e.g. `https://www.nxgs.net`. Defaults to any site. |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | Turns on text-message reminders (see below). `TWILIO_MESSAGING_SERVICE_SID` can replace `TWILIO_FROM`. |
 | `ANTHROPIC_API_KEY` | Turns on the chat assistant (see below). |
 | `ASSISTANT_MODEL` | Optional. Defaults to `claude-haiku-5-5` (fast and low-cost). |
 | `RESEND_API_KEY` | Turns on email sending (see below). Without it, emails are only recorded in the admin Emails tab. |
@@ -90,6 +107,18 @@ Then open http://localhost:3000/book and http://localhost:3000/admin.
 The assistant's name, and the model it uses, are in `src/config.js` under `assistant`. It always uses the live prices, add-ons, hours and availability, so price changes on the Pricing tab apply to the chat right away. Built-in limits: 1,000 characters per message, 60 messages per conversation, 40 messages per visitor every 10 minutes, and 3 bookings per conversation. Unpaid chat bookings release their time after 30 minutes, the same as the form.
 
 To put the chat on nxgs.net by itself, add `<script src="https://book.nxgs.net/static/chat.js" defer></script>`, or use the embed with `data-page="chat"`.
+
+## Turn on text messages
+
+1. Create a [Twilio](https://www.twilio.com) account and buy a local number.
+2. For texting customers in the US, Twilio requires **A2P 10DLC registration** of your business and use case ("appointment reminders"). Approval usually takes a few days.
+3. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your number, e.g. `+15165550100`), then restart.
+
+Texts go only to families who check "Text me reminders" when booking: the booking confirmation, the balance reminder, and a day-before reminder that also mentions any missing waivers. Every text ends with "Reply STOP to opt out", and Twilio handles STOP automatically.
+
+## Before using waivers with real customers
+
+Paste your attorney- or insurer-approved waiver into Admin → Settings → Waiver text. Each signature stores the exact version that was signed, the signer's typed name, a drawn signature, the date and time, and the device's IP address.
 
 ## Turn on emails
 
@@ -132,6 +161,10 @@ src/pricing.js     quotes, tax, deposit, balance due date
 src/bookings.js    bookings, payments, leads, dashboard numbers
 src/stripe.js      Stripe Checkout and webhook verification
 src/assistant.js   chat assistant (Claude API + booking tools)
+src/guests.js      invitations, RSVPs and waivers
+src/gifts.js       gift cards and referral credits
+src/reviews.js     post-party reviews
+src/media.js       uploaded images (photos, signatures)
 src/notifications.js  automatic emails and reminders
 src/quickbooks.js  QuickBooks Online connection and sync
 src/price-settings.js  prices edited from the admin page
@@ -142,6 +175,5 @@ test/              automated tests
 
 ## Not built yet
 
-- Text-message reminders
 - Online refunds (issue them in Stripe for now)
 - Multi-facility setup, for selling the app to other facilities or running the Massapequa location

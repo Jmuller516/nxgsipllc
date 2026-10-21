@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NXGS Run Sheet</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    main { max-width: 900px; }
+    .party { border: 2px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 14px; break-inside: avoid; background: var(--card); }
+    .party-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+    .party-head h2 { margin: 0; font-size: 1.3rem; }
+    .time { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+    @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+    .grid2 h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 4px; }
+    .grid2 ul { margin: 0; padding-left: 18px; }
+    .alert { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 8px 10px; font-weight: 600; margin-top: 10px; }
+    .boxes li { list-style: none; margin-left: -18px; }
+    .boxes li::before { content: "☐ "; }
+    .boxes li.ok::before { content: "☑ "; color: var(--ok); }
+    @media print { .noprint { display: none !important; } .party { border-color: #999; } body { font-size: 12px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="noprint toolbar" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+    <div><label for="day">Day</label><input id="day" type="date"></div>
+    <button class="btn" id="print">Print</button>
+    <a class="btn ghost" href="/admin">Back to admin</a>
+  </div>
+  <div id="out"><p class="muted">Loading…</p></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const q = new URLSearchParams(location.search);
+$('day').value = q.get('date') || new Date().toLocaleDateString('en-CA');
+$('day').onchange = load;
+$('print').onclick = () => window.print();
+
+async function load() {
+  const r = await fetch('/api/admin/runsheet?date=' + $('day').value);
+  const d = await r.json();
+  if (!r.ok) { $('out').innerHTML = `<p class="error">${esc(d.error)}</p>`; return; }
+  const day = new Date(d.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  $('out').innerHTML = `
+    <p class="eyebrow">NXGS · Run sheet</p>
+    <h1>${esc(day)}</h1>
+    <p>${d.parties.length} part${d.parties.length === 1 ? 'y' : 'ies'}${d.closures.length ? ` · Closures: ${esc(d.closures.join(', '))}` : ''}</p>
+    ${Object.keys(d.deliveries).length ? `<div class="card" style="margin-bottom:14px"><h2 style="margin-top:0">Deliveries & orders today</h2>${Object.entries(d.deliveries).map(([v, items]) => `<p><b>${esc(v)}</b><br>${items.map(esc).join('<br>')}</p>`).join('')}</div>` : ''}
+    ${d.parties.map((p) => {
+      const g = p.guests;
+      const sizes = Object.entries(p.details.shirtSizes || {}).map(([k, n]) => `${k} × ${n}`).join(', ');
+      return `<section class="party">
+        <div class="party-head">
+          <h2>${p.theme ? p.theme.emoji + ' ' : ''}${esc(p.child || p.parent)}${p.age ? `, turning ${p.age}` : ''}</h2>
+          <span class="time">${esc(p.timeLabel)} – ${esc(p.endLabel)}</span>
+        </div>
+        <p style="margin:4px 0">${esc(p.packageName)} · ${p.kids} kids booked · ${g.yes} RSVP’d yes · Host: <b>${esc(p.host || 'not assigned')}</b> · Parent: ${esc(p.parent)} ${esc(p.phone)}${p.status === 'pending' ? ' · <span class="no">UNPAID HOLD</span>' : ''}</p>
+        ${g.allergies.length ? `<div class="alert">⚠ Allergies: ${g.allergies.map((a) => `${esc(a.who)}: ${esc(a.note)}`).join(' · ')}</div>` : ''}
+        ${p.balanceCents > 0 ? `<div class="alert" style="background:var(--warn-bg);color:var(--warn)">Collect balance at check-in: ${money(p.balanceCents)}</div>` : ''}
+        <div class="grid2">
+          <div><h3>Schedule</h3><ul>${p.schedule.map((s) => `<li>${esc(s.from)} ${esc(s.label)}</li>`).join('')}</ul>
+            ${p.theme ? `<h3 style="margin-top:10px">Theme</h3><p style="margin:0">${esc(p.theme.name)}</p>` : ''}
+            ${p.addOns.length ? `<h3 style="margin-top:10px">Add-ons</h3><ul>${p.addOns.map((a) => `<li>${esc(a.name)} × ${a.qty}</li>`).join('')}</ul>` : ''}
+            ${sizes ? `<h3 style="margin-top:10px">Shirt sizes</h3><p style="margin:0">${esc(sizes)}</p>` : ''}
+            ${p.details.jerseyNumber ? `<h3 style="margin-top:10px">Jersey #</h3><p style="margin:0">${esc(p.details.jerseyNumber)}</p>` : ''}
+            ${p.missingDetails.length ? `<p class="no" style="margin-top:8px">Missing details: ${esc(p.missingDetails.join(', '))}</p>` : ''}
+            ${p.notes || p.details.extraNotes ? `<h3 style="margin-top:10px">Notes</h3><p style="margin:0;white-space:pre-wrap">${esc([p.notes, p.details.extraNotes].filter(Boolean).join('\n'))}</p>` : ''}
+          </div>
+          <div><h3>Check-in · waivers ${g.waiversSigned}/${g.waiversNeeded}</h3>
+            <ul class="boxes">
+              ${g.birthdayChild ? `<li class="${g.birthdayChild.waiver ? 'ok' : ''}">${esc(g.birthdayChild.name)} (birthday)${g.birthdayChild.waiver ? '' : ' · <b>NEEDS WAIVER</b>'}</li>` : ''}
+              ${g.guests.filter((x) => x.attending === 'yes').map((x) => `<li class="${x.waiver ? 'ok' : ''}">${esc(x.childName)}${x.waiver ? '' : ' · <b>NEEDS WAIVER</b>'}</li>`).join('')}
+            </ul>
+            <p class="muted small">Walk-ins without a waiver: sign at /waiver on the front desk tablet.</p>
+          </div>
+        </div>
+      </section>`;
+    }).join('') || '<p class="muted">No parties this day.</p>'}`;
+}
+load();
+</script>
+</body>
+</html>

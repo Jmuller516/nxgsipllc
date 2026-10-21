@@ -69,7 +69,10 @@
     <button class="tab" aria-selected="false" data-tab="reports">Reports</button>
     <button class="tab" aria-selected="false" data-tab="pricing">Pricing</button>
     <button class="tab" aria-selected="false" data-tab="chats">Chats</button>
-    <button class="tab" aria-selected="false" data-tab="emails">Emails</button>
+    <button class="tab" aria-selected="false" data-tab="waivers">Waivers</button>
+    <button class="tab" aria-selected="false" data-tab="gifts">Gift cards</button>
+    <button class="tab" aria-selected="false" data-tab="reviews">Reviews</button>
+    <button class="tab" aria-selected="false" data-tab="emails">Messages</button>
     <button class="tab" aria-selected="false" data-tab="settings">Settings</button>
   </div>
 
@@ -165,6 +168,38 @@
     </div>
   </section>
 
+  <section id="tab-waivers" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Signed waivers</h2>
+      <p class="muted">Each waiver covers one child for a year. Front desk sign-in page for walk-ins: <a href="/waiver" target="_blank">/waiver</a>. Change the waiver text under Settings.</p>
+      <div class="toolbar"><div style="flex:1"><label for="wq">Search child, parent or email</label><input id="wq" placeholder="e.g. Rivera"></div></div>
+      <div class="scroll"><table class="list" id="waivers"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-gifts" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Gift cards & party credits</h2>
+      <p class="muted">Customers buy gift cards at <a href="/gift-cards" target="_blank">/gift-cards</a>. Referral credits are created automatically when a referred family books.</p>
+      <details><summary style="cursor:pointer;font-weight:600">Issue a gift card or credit</summary>
+        <div class="row"><div><label for="gName">For</label><input id="gName" placeholder="Name"></div><div><label for="gAmt">Amount ($)</label><input id="gAmt" type="number" min="1" step="1"></div></div>
+        <label for="gEmail">Email <span class="muted">(optional)</span></label><input id="gEmail" type="email">
+        <label for="gMsg">Note <span class="muted">(optional)</span></label><input id="gMsg" placeholder="e.g. Sorry about the wait on Saturday">
+        <label class="check"><input type="checkbox" id="gSend" checked> Email it to them</label>
+        <div class="actions"><button class="btn" id="gCreate">Create</button></div><p id="gOut" class="muted"></p>
+      </details>
+      <div class="scroll"><table class="list" id="gifts"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-reviews" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Reviews</h2>
+      <p class="muted">Parents get a review request the day after their party. A review appears on the booking page only if the parent allowed it and you approve it.</p>
+      <div class="scroll"><table class="list" id="reviews"></table></div>
+    </div>
+  </section>
+
   <section id="tab-emails" class="hidden">
     <div class="card">
       <h2 style="margin-top:0">Emails</h2>
@@ -176,6 +211,17 @@
   </section>
 
   <section id="tab-settings" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Waiver text</h2>
+      <p class="muted" id="waiverMode"></p>
+      <textarea id="waiverText" rows="10" style="font-size:.9rem"></textarea>
+      <div class="actions"><button class="btn" id="waiverSave">Save waiver text</button><span class="muted" id="waiverMsg"></span></div>
+      <p class="muted small">Waivers already signed keep the exact version that was signed.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Text messages</h2>
+      <p class="muted" id="smsMode"></p>
+    </div>
     <div class="card">
       <h2 style="margin-top:0">Party calendar in Google Calendar / iPhone</h2>
       <p class="muted">Subscribe to this private link and every party (and closed day) shows up in your own calendar, updating automatically. Anyone with the link can see party details, so only share it with staff.</p>
@@ -254,12 +300,31 @@ async function openBooking(id) {
       <dt>Email</dt><dd><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></dd>
       <dt>Phone</dt><dd><a href="tel:${esc(b.phone)}">${esc(b.phone)}</a></dd>
       ${b.notes ? `<dt>Notes</dt><dd style="white-space:pre-wrap">${esc(b.notes)}</dd>` : ''}
+      ${b.themeInfo ? `<dt>Theme</dt><dd>${b.themeInfo.emoji} ${esc(b.themeInfo.name)}</dd>` : ''}
+      ${b.sms_opt_in ? '<dt>Texts</dt><dd>Opted in</dd>' : ''}
+      ${b.referred_by ? '<dt>Referral</dt><dd>Booked with a referral code</dd>' : ''}
     </dl>
+    <h2>Host</h2>
+    <div class="linkbox"><input id="hostName" placeholder="Staff member running this party" value="${esc(b.host_name || '')}" style="border:0;background:transparent;padding:4px"><button class="btn small" id="hostSave">Save</button></div>
+    <h2>Party details ${b.detailsStatus.complete ? '<span class="pill paid">complete</span>' : '<span class="pill pending">missing</span>'}</h2>
+    ${b.detailsStatus.missing.length ? `<p class="muted">Missing: ${esc(b.detailsStatus.missing.join(', '))}</p>` : ''}
+    <dl class="facts">
+      ${b.details.allergies ? `<dt>Allergies</dt><dd>${esc(b.details.allergies)}</dd>` : ''}
+      ${b.details.jerseyNumber ? `<dt>Jersey #</dt><dd>${esc(b.details.jerseyNumber)}</dd>` : ''}
+      ${Object.keys(b.details.shirtSizes || {}).length ? `<dt>Shirts</dt><dd>${esc(Object.entries(b.details.shirtSizes).map(([k, n]) => `${k} × ${n}`).join(', '))}</dd>` : ''}
+      ${b.details.extraNotes ? `<dt>Notes</dt><dd>${esc(b.details.extraNotes)}</dd>` : ''}
+      ${b.details.photo ? `<dt>Photo</dt><dd><a href="${esc(b.details.photo)}" target="_blank"><img src="${esc(b.details.photo)}" alt="Birthday child photo" style="width:72px;height:72px;object-fit:cover;border-radius:8px"></a></dd>` : ''}
+    </dl>
+    <h2>Guests & waivers</h2>
+    <p>${b.guests.yes} coming · ${b.guests.no} not coming · waivers ${b.guests.waiversSigned}/${b.guests.waiversNeeded}${b.guests.missingWaivers.length ? ` · <span class="no">missing: ${esc(b.guests.missingWaivers.join(', '))}</span>` : ''}</p>
+    ${b.guests.allergies.length ? `<p class="error">Allergies: ${esc(b.guests.allergies.map((a) => `${a.who}: ${a.note}`).join(' · '))}</p>` : ''}
+    <div class="actions"><a class="btn ghost small" href="/admin/runsheet?date=${esc(b.party_date)}" target="_blank">Run sheet for this day</a>${b.invite_token ? `<a class="btn ghost small" href="/invite/${esc(b.invite_token)}" target="_blank">Invitation page</a>` : ''}</div>
+    ${b.review ? `<h2>Review</h2><p>${'★'.repeat(b.review.rating)}${'☆'.repeat(5 - b.review.rating)} ${esc(b.review.comment || '')}</p>` : ''}
     <h2>Schedule</h2>
     <ul class="schedule">${b.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
     <h2>Money</h2>
     <table class="receipt">
-      ${b.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ' × ' + l.qty : ''}${l.vendor ? `<br><span class="muted">${esc(l.vendor)}</span>` : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('')}
+      ${b.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ' × ' + l.qty : ''}${l.vendor ? `<br><span class="muted">${esc(l.vendor)}</span>` : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('')}
       ${(() => { const ad = b.quote.lines.filter((l) => l.kind === 'addon'); if (!ad.length) return ''; const rev = ad.reduce((s, l) => s + l.totalCents, 0), cost = ad.reduce((s, l) => s + (l.costCents || 0) * l.qty, 0); return `<tr class="sub"><td>Add-ons est. cost ${money(cost)} · margin ${money(rev - cost)}</td><td></td></tr>`; })()}
       <tr class="sub"><td>Tax</td><td class="num">${money(b.quote.taxCents)}</td></tr>
       <tr class="total"><td>Total</td><td class="num">${money(b.total_cents)}</td></tr>
@@ -285,6 +350,9 @@ async function openBooking(id) {
     </div>`;
   const err = (e) => { $('dErr').textContent = e.message; $('dErr').classList.remove('hidden'); };
   $('dClose').onclick = () => d.close();
+  $('hostSave').onclick = async () => {
+    try { await api(`/api/admin/bookings/${b.id}`, 'PATCH', { hostName: $('hostName').value }); $('hostSave').textContent = 'Saved ✓'; loadCalendar(); } catch (e) { err(e); }
+  };
   if ($('pSave')) $('pSave').onclick = async () => {
     try { await api(`/api/admin/bookings/${b.id}/payment`, 'POST', { amount: $('pAmt').value, method: $('pMethod').value, note: $('pNote').value }); d.close(); refresh(); } catch (e) { err(e); }
   };
@@ -323,7 +391,70 @@ async function loadLeads() {
   });
 }
 
-function refresh() { return Promise.all([loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadEmails(), loadQbo(), loadFeed()]); }
+function refresh() { return Promise.all([loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadWaivers(), loadGifts(), loadReviews(), loadWaiverText(), loadEmails(), loadQbo(), loadFeed()]); }
+
+// ---------- Waivers ----------
+let wTimer;
+async function loadWaivers() {
+  const list = await api('/api/admin/waivers?q=' + encodeURIComponent($('wq').value || ''));
+  $('waivers').innerHTML = '<tr><th>Signed</th><th>Child</th><th>Parent</th><th class="hide-sm">Party</th><th>Status</th></tr>' +
+    (list.map((w) => `<tr class="click" data-w="${w.id}"><td>${esc(w.signed_at.slice(0, 10))}</td><td><b>${esc(w.child_name)}</b></td><td>${esc(w.guardian_name)}<br><span class="muted">${esc(w.guardian_email)}</span></td>
+      <td class="hide-sm">${w.ref ? `${esc(w.ref)}<br><span class="muted">${esc(w.party_date)}</span>` : '<span class="muted">walk-in</span>'}</td>
+      <td>${w.current ? '<span class="pill paid">current</span>' : '<span class="pill expired">expired</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No waivers yet.</td></tr>');
+  $('waivers').querySelectorAll('[data-w]').forEach((tr) => tr.onclick = async () => {
+    const w = await api('/api/admin/waivers/' + tr.dataset.w);
+    const d = $('detail');
+    d.innerHTML = `<p class="eyebrow">Waiver · version ${esc(w.waiver_version)}</p><h2 style="margin-top:4px">${esc(w.child_name)}</h2>
+      <dl class="facts"><dt>Guardian</dt><dd>${esc(w.guardian_name)}</dd><dt>Email</dt><dd>${esc(w.guardian_email)}</dd>${w.guardian_phone ? `<dt>Phone</dt><dd>${esc(w.guardian_phone)}</dd>` : ''}
+      ${w.child_birthdate ? `<dt>Birth date</dt><dd>${esc(w.child_birthdate)}</dd>` : ''}${w.emergency_name ? `<dt>Emergency</dt><dd>${esc(w.emergency_name)} ${esc(w.emergency_phone || '')}</dd>` : ''}
+      ${w.medical_notes ? `<dt>Medical</dt><dd>${esc(w.medical_notes)}</dd>` : ''}<dt>Signed</dt><dd>${esc(new Date(w.signed_at).toLocaleString())}</dd><dt>Expires</dt><dd>${esc(w.expires_at.slice(0, 10))}</dd>
+      <dt>Typed name</dt><dd>${esc(w.typed_signature)}</dd></dl>
+      ${w.signatureImage ? `<img src="${w.signatureImage}" alt="Signature" style="width:100%;max-width:420px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:10px">` : ''}
+      <div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    d.showModal();
+  });
+}
+$('wq').oninput = () => { clearTimeout(wTimer); wTimer = setTimeout(loadWaivers, 250); };
+
+async function loadWaiverText() {
+  const w = await api('/api/admin/waiver-text');
+  $('waiverText').value = w.text;
+  $('waiverMode').innerHTML = w.isSample ? '⚠️ This is <b>sample text</b>. Replace it with the waiver from your attorney or insurance carrier before using it with customers.' : `Current version: ${esc(w.version)}`;
+}
+$('waiverSave').onclick = async () => {
+  try { await api('/api/admin/waiver-text', 'PUT', { text: $('waiverText').value }); $('waiverMsg').textContent = 'Saved ✓'; loadWaiverText(); } catch (e) { $('waiverMsg').textContent = e.message; }
+};
+
+// ---------- Gift cards ----------
+async function loadGifts() {
+  const list = await api('/api/admin/gift-cards');
+  const kinds = { purchase: 'Bought', referral: 'Referral credit', manual: 'Issued by staff' };
+  $('gifts').innerHTML = '<tr><th>Code</th><th>Type</th><th>For</th><th class="num">Value</th><th class="num">Left</th><th></th></tr>' +
+    (list.map((c) => `<tr><td><code>${esc(c.code)}</code><br><span class="muted">${esc(c.created_at.slice(0, 10))}</span></td><td>${esc(kinds[c.kind] || c.kind)}${c.buyer_name ? `<br><span class="muted">from ${esc(c.buyer_name)}</span>` : ''}</td>
+      <td>${esc(c.recipient_name || '')}<br><span class="muted">${esc(c.recipient_email || '')}</span></td><td class="num">${money(c.initial_cents)}</td>
+      <td class="num">${c.status === 'active' ? money(c.balanceCents) : `<span class="pill ${c.status === 'void' ? 'cancelled' : 'pending'}">${esc(c.status)}</span>`}</td>
+      <td>${c.status === 'active' ? `<button class="btn ghost small" data-void="${c.id}">Void</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No gift cards yet.</td></tr>');
+  $('gifts').querySelectorAll('[data-void]').forEach((b) => b.onclick = async () => {
+    if (!confirm('Void this gift card? Its remaining balance can no longer be used.')) return;
+    await api(`/api/admin/gift-cards/${b.dataset.void}/void`, 'POST', {}); loadGifts();
+  });
+}
+$('gCreate').onclick = async () => {
+  try {
+    const c = await api('/api/admin/gift-cards', 'POST', { recipientName: $('gName').value, amount: $('gAmt').value, recipientEmail: $('gEmail').value, message: $('gMsg').value, sendEmail: $('gSend').checked });
+    $('gOut').textContent = `Created ${c.code} for ${money(c.initial_cents)}.`; loadGifts();
+  } catch (e) { $('gOut').textContent = e.message; }
+};
+
+// ---------- Reviews ----------
+async function loadReviews() {
+  const list = await api('/api/admin/reviews');
+  $('reviews').innerHTML = '<tr><th>Date</th><th>Rating</th><th>Review</th><th>On website</th></tr>' +
+    (list.map((r) => `<tr><td>${esc(r.created_at.slice(0, 10))}<br><span class="muted">${esc(r.ref)}</span></td><td style="color:#f5b301;white-space:nowrap">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</td>
+      <td>${esc(r.comment || '—')}<br><span class="muted">${esc(r.display_name || r.parent_name)}</span></td>
+      <td>${r.may_publish ? `<label class="check" style="margin:0"><input type="checkbox" data-approve="${r.id}" ${r.approved ? 'checked' : ''}> Show</label>` : '<span class="muted">Parent said private</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No reviews yet.</td></tr>');
+  $('reviews').querySelectorAll('[data-approve]').forEach((c) => c.onchange = () => api('/api/admin/reviews/' + c.dataset.approve, 'POST', { approved: c.checked }));
+}
 
 // ---------- Chats ----------
 async function loadChats() {
@@ -374,7 +505,7 @@ function showCalDay() {
   const parties = calData.parties.filter((p) => p.date === calSel);
   const blocks = calData.blocks.filter((b) => b.date === calSel);
   $('calDay').classList.remove('hidden');
-  $('calDayTitle').textContent = fmtDate(calSel);
+  $('calDayTitle').innerHTML = `${esc(fmtDate(calSel))} <a class="btn ghost small" href="/admin/runsheet?date=${calSel}" target="_blank" style="margin-left:8px">Run sheet</a>`;
   $('calDayList').innerHTML = (parties.length ? '<table class="list">' + parties.map((p) => `<tr class="click" data-id="${p.id}">
       <td>${esc(p.timeLabel)}–${esc(p.endLabel)}</td><td><b>${esc(p.child || '—')}</b><br><span class="muted">${esc(p.parent)} · ${p.kids} kids · ${esc(p.packageName)}</span></td>
       <td><span class="pill ${esc(p.status)}">${esc(p.status)}</span>${p.balanceCents > 0 ? `<br><span class="muted">${money(p.balanceCents)} owed</span>` : ''}</td></tr>`).join('') + '</table>' : '<p class="muted">No parties booked.</p>') +
@@ -495,14 +626,22 @@ $('priceReset').onclick = async () => {
 // ---------- Emails ----------
 async function loadEmails() {
   const r = await api('/api/admin/emails');
-  $('emailMode').innerHTML = r.enabled ? '✅ Emails are being sent.' : '⚠️ Emails are <b>not being sent yet</b> — they are recorded here so you can preview them. Add a Resend API key to turn sending on (see README).';
-  $('emails').innerHTML = '<tr><th>When</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr>' +
-    (r.emails.map((e) => `<tr><td>${esc(e.created_at.slice(5, 16))}</td><td>${esc(e.to_addr)}</td><td>${esc(e.subject)}${e.error && e.status === 'failed' ? `<br><span class="muted">${esc(e.error)}</span>` : ''}</td>
+  $('emailMode').innerHTML = (r.enabled ? '✅ Emails are being sent.' : '⚠️ Emails are <b>not being sent yet</b>. They are recorded here so you can preview them. Add a Resend API key to turn sending on (see README).') +
+    '<br>' + (r.smsEnabled ? '✅ Text messages are being sent to customers who opted in.' : '⚠️ Text messages are <b>not being sent yet</b>. Add Twilio keys to turn them on (see README).');
+  $('smsMode').innerHTML = r.smsEnabled ? '✅ Texts are on. Customers choose at booking whether to get them, and can reply STOP anytime.' : '⚠️ Texts are off until Twilio is set up (see README). Customers can already opt in at booking; their texts will start once it’s connected.';
+  window.__msgs = Object.fromEntries(r.emails.map((e) => [e.id, e]));
+  $('emails').innerHTML = '<tr><th>When</th><th></th><th>To</th><th>Subject</th><th>Status</th><th></th></tr>' +
+    (r.emails.map((e) => `<tr><td>${esc(e.created_at.slice(5, 16))}</td><td title="${e.channel === 'sms' ? 'Text message' : 'Email'}">${e.channel === 'sms' ? '💬' : '✉️'}</td><td>${esc(e.to_addr)}</td><td>${esc(e.subject)}${e.error && e.status === 'failed' ? `<br><span class="muted">${esc(e.error)}</span>` : ''}</td>
       <td><span class="pill ${e.status === 'sent' ? 'paid' : e.status === 'failed' ? 'cancelled' : 'pending'}">${esc(e.status.replace('_', ' '))}</span></td>
       <td><button class="btn ghost small" data-preview="${e.id}">View</button>${r.enabled ? ` <button class="btn ghost small" data-resend="${e.id}">Resend</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No emails yet.</td></tr>');
-  $('emails').querySelectorAll('[data-preview]').forEach((b) => b.onclick = () => {
+  $('emails').querySelectorAll('[data-preview]').forEach((b) => b.onclick = async () => {
     const d = $('detail');
-    d.innerHTML = `<iframe class="preview" src="/api/admin/emails/${b.dataset.preview}/preview"></iframe><div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    const m = window.__msgs[b.dataset.preview];
+    if (m && m.channel === 'sms') {
+      d.innerHTML = `<h2 style="margin-top:0">Text message</h2><p class="muted">To ${esc(m.to_addr)}</p><div style="background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:12px 14px;white-space:pre-wrap">${esc((await api('/api/admin/emails/' + m.id + '/text')).text)}</div><div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    } else {
+      d.innerHTML = `<iframe class="preview" src="/api/admin/emails/${b.dataset.preview}/preview"></iframe><div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    }
     d.showModal();
   });
   $('emails').querySelectorAll('[data-resend]').forEach((b) => b.onclick = async () => { await api(`/api/admin/emails/${b.dataset.resend}/resend`, 'POST', {}); setTimeout(loadEmails, 1500); });
@@ -537,7 +676,7 @@ async function loadQbo() {
 
 document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'waivers', 'gifts', 'reviews', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
   history.replaceState(null, '', '#' + t.dataset.tab);
 });
 const startTab = location.hash.slice(1);

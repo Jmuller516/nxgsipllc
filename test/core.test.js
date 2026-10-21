@@ -134,13 +134,18 @@ test('HTTP: full demo booking flow and admin auth', async () => {
 
     const pay = await fetch(created.checkoutUrl.replace(/^http:\/\/[^/]+/, base), { method: 'POST', redirect: 'manual' });
     assert.equal(pay.status, 303);
-    const conf = await fetch(pay.headers.get('location').replace(/^http:\/\/[^/]+/, base));
-    const htmlText = await conf.text();
-    assert.match(htmlText, /deposit received/);
-    assert.match(htmlText, /Pay balance/);
+    const loc = new URL(pay.headers.get('location'));
+    const conf = await fetch(base + loc.pathname + loc.search);
+    assert.equal(conf.status, 200);
+    assert.match(await conf.text(), new RegExp(`const REF = "${created.ref}"`));
+    const view = await (await fetch(`${base}/api/bookings/${created.ref}?t=${loc.searchParams.get('t')}`)).json();
+    assert.equal(view.status, 'confirmed');
+    assert.ok(view.balanceCents > 0);
+    assert.ok(view.inviteToken);
+    assert.match(view.referralCode, /^SAM-/);
 
     // wrong token can't see the booking
-    assert.equal((await fetch(`${base}/booking/${created.ref}?t=nope`)).status, 404);
+    assert.equal((await fetch(`${base}/api/bookings/${created.ref}?t=nope`)).status, 404);
 
     // admin requires the password
     assert.equal((await fetch(`${base}/api/admin/summary`)).status, 401);

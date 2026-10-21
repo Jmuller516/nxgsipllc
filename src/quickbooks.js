@@ -217,7 +217,7 @@ function createQuickBooks(db, opts = {}) {
 
   // ---------- queue ----------
   function onPayment(_booking, payment) {
-    if (payment.method === 'demo') return; // never send demo payments to the books
+    if (payment.method === 'demo' || payment.method === 'gift_card') return; // demo payments never go to the books; gift card redemptions aren't new income
     db.prepare(`INSERT OR IGNORE INTO qbo_sync (payment_id) VALUES (?)`).run(payment.id);
   }
 
