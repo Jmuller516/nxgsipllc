@@ -8,7 +8,7 @@ class PricingError extends Error {}
  */
 function quote(input, cfg = config) {
   const pkg = cfg.packages.find((p) => p.id === input.packageId);
-  if (!pkg) throw new PricingError('Please choose a party package.');
+  if (!pkg || pkg.active === false) throw new PricingError('Please choose a party package.');
 
   const kids = Number(input.kids);
   if (!Number.isInteger(kids) || kids < 1) throw new PricingError('Number of kids must be at least 1.');
@@ -22,12 +22,18 @@ function quote(input, cfg = config) {
     lines.push({ id: 'extra-kids', name: `Extra child (over ${pkg.includedKids})`, qty: extraKids, unitCents: pkg.extraKidCents, taxable: pkg.taxable, kind: 'extra' });
   }
 
+  const daysUntilParty = daysBetween(input.today, input.partyDate);
   for (const [id, rawQty] of Object.entries(input.addOns || {})) {
     const qty = Number(rawQty);
     if (!qty) continue;
     const addOn = cfg.addOns.find((a) => a.id === id);
     if (!addOn) throw new PricingError(`Unknown add-on: ${id}`);
-    if (!Number.isInteger(qty) || qty < 0 || qty > 100) throw new PricingError(`Invalid quantity for ${addOn.name}.`);
+    if (addOn.active === false) throw new PricingError(`${addOn.name} is no longer offered.`);
+    if (!Number.isInteger(qty) || qty < 0 || qty > 200) throw new PricingError(`Invalid quantity for ${addOn.name}.`);
+    if (addOn.minQty && qty < addOn.minQty) throw new PricingError(`${addOn.name}: minimum order is ${addOn.minQty}.`);
+    if (addOn.leadDays && daysUntilParty < addOn.leadDays) {
+      throw new PricingError(`${addOn.name} needs ${addOn.leadDays} days to make — not available for this party date.`);
+    }
     lines.push({ id: addOn.id, name: addOn.name, qty, unitCents: addOn.priceCents, taxable: addOn.taxable, kind: 'addon', vendor: addOn.vendor, costCents: addOn.costCents });
   }
 

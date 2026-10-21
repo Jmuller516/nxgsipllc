@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book a Party</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
 <main>
+  <img id="logo" class="page-logo hidden" alt="">
   <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
   <h1>Book your event</h1>
   <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
@@ -112,6 +114,10 @@ function ymdLocal(d) { return d.toLocaleDateString('en-CA'); }
 async function init() {
   CFG = await api('/api/config');
   $('bizName').textContent = CFG.business.name;
+  const params = new URLSearchParams(location.search);
+  if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
+  if (params.get('embed')) document.body.classList.add('embedded');
+  if (params.get('tab') === 'inquiry') setTimeout(() => document.querySelector('[data-tab=inquiry]').click());
   if (!CFG.stripe) $('demoBanner').classList.remove('hidden');
   if (new URLSearchParams(location.search).get('cancelled')) $('cancelBanner').classList.remove('hidden');
 
@@ -121,9 +127,24 @@ async function init() {
       <p>${p.description}</p></label>`).join('');
   $('kids').max = CFG.party.maxKids;
 
-  $('addons').innerHTML = CFG.addOns.map((a) => `
-    <div class="addon"><div>${a.name}<small>${money(a.priceCents)}</small></div>
-      <input type="number" min="0" max="100" value="0" inputmode="numeric" data-addon="${a.id}" aria-label="${a.name} quantity"></div>`).join('');
+  $('addons').innerHTML = CFG.addOnCategories.map((c, i) => {
+    const items = CFG.addOns.filter((a) => a.category === c.id);
+    if (!items.length) return '';
+    return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${c.name} <span class="muted" data-count="${c.id}"></span></summary>` +
+      items.map((a) => `
+      <div class="addon" data-row="${a.id}"><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}
+          <small><b>${money(a.priceCents)}</b> ${a.unit === 'each' ? 'each' : '/ ' + a.unit}${a.minQty > 1 ? ` · min ${a.minQty}` : ''}${a.leadDays ? ` · order ${a.leadDays >= 28 ? '4 weeks' : a.leadDays >= 14 ? '2 weeks' : a.leadDays + ' days'} ahead` : ''}</small>
+          <small class="lead-warn hidden">Not enough time before this date</small></div>
+        <input type="number" min="0" max="200" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${a.name} quantity"></div>`).join('') +
+      '</details>';
+  }).join('');
+  // Jump straight to the minimum (or one per kid for favors) instead of making people tap 12 times.
+  document.querySelectorAll('[data-addon]').forEach((inp) => inp.addEventListener('change', () => {
+    const v = Number(inp.value), min = Number(inp.dataset.min);
+    if (v > 0 && v < min) inp.value = inp.dataset.category === 'favors' ? Math.max(min, Number($('kids').value) || min) : min;
+    if (v < 0) inp.value = 0;
+    updateAddonCounts();
+  }));
 
   const today = new Date();
   const min = new Date(today); min.setDate(min.getDate() + CFG.minDaysAhead);
@@ -144,7 +165,7 @@ async function init() {
     $('inquiryDone').classList.add('hidden');
   });
 
-  $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') loadSlots(); scheduleQuote(); });
+  $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
   $('inquiryForm').addEventListener('submit', submitInquiry);
@@ -181,6 +202,31 @@ function formData() {
 }
 
 function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(updateQuote, 150); }
+
+// Grey out add-ons that can't be made in time for the chosen date.
+function updateLeadTimes() {
+  const date = $('date').value;
+  const days = date ? Math.round((new Date(date + 'T12:00') - new Date(new Date().toDateString() + ' 12:00')) / 86400000) : Infinity;
+  CFG.addOns.forEach((a) => {
+    const row = document.querySelector(`[data-row="${a.id}"]`);
+    const inp = row.querySelector('input');
+    const tooSoon = a.leadDays && days < a.leadDays;
+    inp.disabled = !!tooSoon;
+    if (tooSoon) inp.value = 0;
+    row.classList.toggle('unavailable', !!tooSoon);
+    row.querySelector('.lead-warn').classList.toggle('hidden', !tooSoon);
+  });
+  updateAddonCounts();
+}
+
+function updateAddonCounts() {
+  CFG.addOnCategories.forEach((c) => {
+    const el = document.querySelector(`[data-count="${c.id}"]`);
+    if (!el) return;
+    const n = [...document.querySelectorAll(`[data-category="${c.id}"]`)].filter((i) => Number(i.value) > 0).length;
+    el.textContent = n ? `· ${n} selected` : '';
+  });
+}
 
 async function updateQuote() {
   const f = formData();
@@ -232,6 +278,13 @@ async function submitInquiry(e) {
     });
     $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');
   } catch (err) { $('inquiryError').textContent = err.message; $('inquiryError').classList.remove('hidden'); }
+}
+
+// When embedded on nxgs.net, tell the page how tall we are so it can size the frame.
+if (window.parent !== window) {
+  const post = () => window.parent.postMessage({ type: 'nxgs:height', height: document.documentElement.scrollHeight }, '*');
+  new ResizeObserver(post).observe(document.body);
+  window.addEventListener('load', post);
 }
 
 init().catch((e) => { document.querySelector('main').insertAdjacentHTML('beforeend', `<p class="error">${e.message}</p>`); });

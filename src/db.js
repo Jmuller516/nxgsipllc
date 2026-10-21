@@ -72,6 +72,42 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
       created_at      TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Every email the app sends (or would send) — the admin "Emails" tab.
+    CREATE TABLE IF NOT EXISTS emails (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      dedupe_key      TEXT UNIQUE,               -- e.g. balance_reminder:42 so each reminder goes once
+      booking_id      INTEGER REFERENCES bookings(id),
+      lead_id         INTEGER REFERENCES leads(id),
+      kind            TEXT NOT NULL,
+      to_addr         TEXT NOT NULL,
+      subject         TEXT NOT NULL,
+      html            TEXT NOT NULL,
+      text            TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'queued', -- queued | sent | failed | not_configured
+      attempts        INTEGER NOT NULL DEFAULT 0,
+      error           TEXT,
+      provider_id     TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      sent_at         TEXT
+    );
+
+    -- Small key/value store (QuickBooks connection tokens, etc.)
+    CREATE TABLE IF NOT EXISTS settings (
+      key             TEXT PRIMARY KEY,
+      value           TEXT NOT NULL,
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- One row per payment that should be copied into QuickBooks Online.
+    CREATE TABLE IF NOT EXISTS qbo_sync (
+      payment_id      INTEGER PRIMARY KEY REFERENCES payments(id),
+      status          TEXT NOT NULL DEFAULT 'pending', -- pending | synced | failed
+      attempts        INTEGER NOT NULL DEFAULT 0,
+      qbo_id          TEXT,
+      error           TEXT,
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   return db;
 }

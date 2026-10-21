@@ -7,12 +7,33 @@ const stripe = require('./stripe');
 const { money } = require('./pricing');
 const { PricingError } = require('./pricing');
 const { createService, BookingError } = require('./bookings');
+const { createNotifier } = require('./notifications');
+const { createQuickBooks } = require('./quickbooks');
+const priceSettings = require('./price-settings');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 function createApp(db, opts = {}) {
-  const svc = createService(db, config, opts.clock);
+  priceSettings.apply(db); // admin price edits laid over config.js starting prices
+  const hooks = { onPayment: [], onLead: [] };
+  const svc = createService(db, config, opts.clock, hooks);
+  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, baseUrl: opts.baseUrl });
+  const qbo = createQuickBooks(db, { clock: opts.clock, fetch: opts.qboFetch });
+  hooks.onPayment.push(notifier.onPayment, qbo.onPayment);
+  hooks.onLead.push(notifier.onLead);
+
+  // Send queued emails / QuickBooks entries soon after something happens, without slowing the request.
+  let kickTimer = null;
+  const kick = () => {
+    if (kickTimer || opts.background === false) return;
+    kickTimer = setTimeout(() => { kickTimer = null; background().catch((e) => console.error(e)); }, 250);
+  };
+  async function background() {
+    svc.expireHolds();
+    await notifier.tick();
+    await qbo.syncPending();
+  }
   const routes = [];
   const route = (method, pattern, handler, { admin = false } = {}) => {
     const keys = [];
@@ -23,8 +44,10 @@ function createApp(db, opts = {}) {
   // ---------- Public API ----------
   route('GET', '/api/config', () => ({
     business: { name: config.business.name, website: config.business.website },
-    packages: config.packages,
-    addOns: config.addOns.map(({ costCents, ...a }) => a), // never expose vendor cost
+    brand: { logoUrl: config.brand.logoUrl },
+    packages: config.packages.filter((p) => p.active !== false),
+    addOns: config.addOns.filter((a) => a.active !== false).map(({ costCents, vendor, ...a }) => a), // never expose cost or vendor
+    addOnCategories: config.addOnCategories,
     inquiryTypes: config.inquiryTypes,
     party: { phases: config.party.phases, maxKids: config.party.maxKids },
     payments: { depositPercent: config.payments.depositPercent, balanceDueDaysBefore: config.payments.balanceDueDaysBefore, depositRefundable: config.payments.depositRefundable, holdMinutes: config.payments.holdMinutes },
@@ -91,6 +114,34 @@ function createApp(db, opts = {}) {
     return { customerPage: customerUrl(b, baseUrl) };
   }, { admin: true });
   route('GET', '/api/admin/leads', () => svc.listLeads(), { admin: true });
+
+  // Pricing (edited from the admin page)
+  route('GET', '/api/admin/pricing', () => priceSettings.view(), { admin: true });
+  route('PUT', '/api/admin/pricing', ({ body }) => {
+    try { priceSettings.save(db, body); } catch (e) { throw new BookingError(e.message); }
+    return priceSettings.view();
+  }, { admin: true });
+  route('POST', '/api/admin/pricing/reset', () => { priceSettings.reset(db); return priceSettings.view(); }, { admin: true });
+
+  // Emails
+  route('GET', '/api/admin/emails', () => ({ enabled: notifier.enabled, emails: notifier.list() }), { admin: true });
+  route('GET', '/api/admin/emails/:id/preview', ({ params }) => {
+    const e = notifier.get(Number(params.id));
+    if (!e) throw notFound();
+    return html(e.html);
+  }, { admin: true });
+  route('POST', '/api/admin/emails/:id/resend', ({ params }) => {
+    if (!notifier.resend(Number(params.id))) throw notFound();
+    kick();
+    return { ok: true };
+  }, { admin: true });
+  route('POST', '/api/admin/emails/run', async () => ({ queued: notifier.queueReminders(), sent: await notifier.flush() }), { admin: true });
+
+  // QuickBooks
+  route('GET', '/api/admin/quickbooks', () => qbo.status(), { admin: true });
+  route('POST', '/api/admin/quickbooks/sync', async () => ({ ...(await qbo.syncPending()), status: qbo.status() }), { admin: true });
+  route('POST', '/api/admin/quickbooks/retry/:paymentId', async ({ params }) => { qbo.retry(Number(params.paymentId)); await qbo.syncPending(); return qbo.status(); }, { admin: true });
+  route('POST', '/api/admin/quickbooks/disconnect', async () => { await qbo.disconnect(); return qbo.status(); }, { admin: true });
   route('PATCH', '/api/admin/leads/:id', ({ params, body }) => svc.updateLead(Number(params.id), body), { admin: true });
   route('GET', '/api/admin/export/bookings.csv', () => csv(
     ['Ref', 'Status', 'Party date', 'Start', 'Package', 'Kids', 'Child', 'Parent', 'Email', 'Phone', 'Subtotal', 'Tax', 'Total', 'Paid', 'Balance', 'Balance due'],
@@ -199,9 +250,22 @@ function createApp(db, opts = {}) {
       if (req.method === 'GET' && bm) return send(res, await bookingPage({ params: { ref: bm[1] }, query: Object.fromEntries(url.searchParams), baseUrl }));
       if (pathname === '/pay/demo') {
         const ctx = { query: Object.fromEntries(url.searchParams), baseUrl };
-        return send(res, req.method === 'POST' ? demoPaySubmit(ctx) : demoPayPage(ctx));
+        if (req.method === 'POST') { const r = demoPaySubmit(ctx); kick(); return send(res, r); }
+        return send(res, demoPayPage(ctx));
       }
+      if (req.method === 'GET' && pathname === '/static/theme.css') return sendTheme(res);
       if (req.method === 'GET' && pathname.startsWith('/static/')) return sendFile(res, pathname.slice(8), { embeddable: true });
+      if (req.method === 'GET' && (pathname === '/quickbooks/connect' || pathname === '/quickbooks/callback')) {
+        if (!adminOk(req)) return askForLogin(res);
+        if (pathname === '/quickbooks/connect') return send(res, { redirect: qbo.authorizeUrl() });
+        try {
+          await qbo.handleCallback(Object.fromEntries(url.searchParams));
+          kick();
+          return send(res, { redirect: '/admin?qbo=connected#settings' });
+        } catch (e) {
+          return send(res, { redirect: `/admin?qbo_error=${encodeURIComponent(e.message)}#settings` });
+        }
+      }
       if (pathname === '/healthz') return send(res, { ok: true });
 
       // API
@@ -210,13 +274,14 @@ function createApp(db, opts = {}) {
         const m = r.re.exec(pathname);
         if (!m) continue;
         if (r.admin && !adminOk(req)) return send(res, { error: 'Admin login required' }, 401);
-        const rawBody = ['POST', 'PATCH'].includes(req.method) ? await readBody(req) : '';
+        const rawBody = ['POST', 'PATCH', 'PUT'].includes(req.method) ? await readBody(req) : '';
         let body = {};
         if (rawBody && !pathname.startsWith('/webhooks/')) {
           try { body = JSON.parse(rawBody); } catch { throw new BookingError('Invalid request.'); }
         }
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const result = await r.handler({ req, params, query: Object.fromEntries(url.searchParams), body, rawBody, baseUrl });
+        if (req.method !== 'GET') kick();
         return send(res, result);
       }
       return send(res, { error: 'Not found' }, 404);
@@ -238,7 +303,20 @@ function createApp(db, opts = {}) {
     return safeEqual(pass || '', pw);
   }
 
-  return { handle, svc };
+  return { handle, svc, notifier, qbo, background };
+}
+
+// Brand colors & fonts from config.brand, loaded after style.css.
+function sendTheme(res) {
+  const b = config.brand;
+  const font = b.googleFont ? `@import url('https://fonts.googleapis.com/css2?family=${encodeURI(b.googleFont)}&display=swap');\n` : '';
+  const css = `${font}:root { --brand: ${b.primaryColor}; --accent: ${b.accentColor}; --radius: ${Number(b.cornerRadius)}px; }
+body { font-family: ${b.fontFamily}; }
+@media (prefers-color-scheme: dark) { :root { --brand: color-mix(in srgb, ${b.primaryColor} 70%, white); } }
+.page-logo { display: block; max-height: 56px; max-width: 220px; margin: 0 0 10px; }
+`;
+  res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-cache' });
+  res.end(css);
 }
 
 // ---------- rendering ----------
@@ -296,7 +374,7 @@ function renderBooking(b, payments, notice, baseUrl) {
 
 function layout(title, body) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${esc(title)}</title><link rel="stylesheet" href="/static/style.css"></head><body class="page"><main>${body}</main></body></html>`;
+  <title>${esc(title)}</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/theme.css"></head><body class="page"><main>${config.brand.logoUrl ? `<img class="page-logo" src="${esc(config.brand.logoUrl)}" alt="${esc(config.business.name)}">` : ''}${body}</main></body></html>`;
 }
 
 function adminView(b) {
@@ -381,11 +459,16 @@ function start() {
   const db = require('./db').open();
   const app = createApp(db);
   const port = Number(process.env.PORT || 3000);
+  const run = () => app.background().catch((e) => console.error('Background job failed:', e));
+  setInterval(run, 5 * 60 * 1000).unref();
+  setTimeout(run, 2000).unref();
   http.createServer(app.handle).listen(port, () => {
     console.log(`NXGS Party App running at http://localhost:${port}`);
     console.log(`  Booking page: http://localhost:${port}/book`);
     console.log(`  Admin:        http://localhost:${port}/admin ${process.env.ADMIN_PASSWORD ? '' : '(set ADMIN_PASSWORD to enable)'}`);
     console.log(`  Payments:     ${stripe.enabled() ? 'Stripe' : 'DEMO MODE (set STRIPE_SECRET_KEY for real payments)'}`);
+    console.log(`  Emails:       ${app.notifier.enabled ? 'sending via Resend' : 'recorded only (set RESEND_API_KEY to send)'}`);
+    console.log(`  QuickBooks:   ${app.qbo.configured() ? (app.qbo.connected() ? 'connected' : 'ready — connect from Admin') : 'off (set QBO_CLIENT_ID / QBO_CLIENT_SECRET)'}`);
   });
 }
 

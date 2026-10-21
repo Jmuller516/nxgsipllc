@@ -72,6 +72,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .addon { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .addon input { width: 76px; text-align: center; }
 .addon small { display: block; color: var(--muted); }
+.addon.unavailable > div { opacity: .5; }
+.addon .lead-warn { color: var(--bad); opacity: 1; }
+.addon-group { border-bottom: 1px solid var(--line); }
+.addon-group > summary { cursor: pointer; font-weight: 700; padding: 12px 0; list-style: revert; }
+.addon-group .addon:last-child { border-bottom: 0; }
 
 .receipt { width: 100%; border-collapse: collapse; }
 .receipt td { padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -101,3 +106,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
   .actions, .btn { display: none !important; }
   .card { border: 0; padding: 0; }
 }
+
+/* Embedded on another site: drop the outer padding and page background so it blends in. */
+body.embedded { background: transparent; }
+body.embedded main { padding: 0 0 16px; max-width: none; }
+body.embedded #bizName, body.embedded #logo { display: none; }

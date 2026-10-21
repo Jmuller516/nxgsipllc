@@ -18,8 +18,10 @@ function makeRef() {
   return `NX-${s}`;
 }
 
-function createService(db, cfg = config, clock = () => new Date()) {
+function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
   const nowIso = () => clock().toISOString();
+  // hooks.onPayment(booking, payment) / hooks.onLead(lead) — emails, QuickBooks. A hook failing never blocks a payment.
+  const fire = (name, ...args) => { for (const h of [].concat(hooks[name] || [])) { try { h(...args); } catch (e) { console.error(`${name} hook failed:`, e); } } };
 
   /** Start times already holding a slot on this date (paid, or unpaid within the hold window). */
   function takenStarts(dateYmd, excludeId = null) {
@@ -107,7 +109,7 @@ function createService(db, cfg = config, clock = () => new Date()) {
       const b = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
       if (!b) throw new BookingError('Booking not found.');
       if (!Number.isInteger(amountCents) || amountCents <= 0) throw new BookingError('Invalid amount.');
-      db.prepare(`INSERT INTO payments (booking_id, kind, method, amount_cents, stripe_session_id, stripe_payment_intent, note)
+      const pinfo = db.prepare(`INSERT INTO payments (booking_id, kind, method, amount_cents, stripe_session_id, stripe_payment_intent, note)
                   VALUES (?, ?, ?, ?, ?, ?, ?)`).run(bookingId, kind, method, amountCents, stripeSessionId, paymentIntent, note);
       const paid = b.paid_cents + amountCents;
       // A late payment on an expired hold still confirms the booking; staff will see it in the dashboard.
@@ -115,9 +117,11 @@ function createService(db, cfg = config, clock = () => new Date()) {
       db.prepare(`UPDATE bookings SET paid_cents = ?, status = ?, hold_expires_at = NULL, updated_at = datetime('now') WHERE id = ?`)
         .run(paid, status, bookingId);
       db.exec('COMMIT');
-      return get(bookingId);
+      const booking = get(bookingId);
+      fire('onPayment', booking, db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(pinfo.lastInsertRowid)));
+      return booking;
     } catch (e) {
-      db.exec('ROLLBACK');
+      if (db.isTransaction) db.exec('ROLLBACK');
       throw e;
     }
   }
@@ -200,7 +204,9 @@ function createService(db, cfg = config, clock = () => new Date()) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(input.eventType, clean(input.name), clean(input.organization),
       clean(input.email).toLowerCase(), clean(input.phone), clean(input.preferredDate),
       input.groupSize ? Number(input.groupSize) : null, clean(input.message));
-    return db.prepare('SELECT * FROM leads WHERE id = ?').get(Number(info.lastInsertRowid));
+    const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(Number(info.lastInsertRowid));
+    fire('onLead', lead);
+    return lead;
   }
 
   function listLeads() {

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NXGS Admin</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
   <style>
     main { max-width: 1100px; }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -29,6 +30,16 @@
     dialog::backdrop { background: rgb(0 0 0 / .45); }
     .scroll { overflow-x: auto; }
     @media (max-width: 700px) { .hide-sm { display: none; } }
+    .tabs { overflow-x: auto; scrollbar-width: none; }
+    .tabs .tab { flex: 1 0 auto; padding: 10px 14px; }
+    .price-table input { padding: 7px 8px; min-width: 70px; }
+    .price-table input[type=checkbox] { width: auto; min-width: 0; }
+    .price-table td.name { min-width: 180px; }
+    .changed { outline: 2px solid var(--accent); }
+    .savebar { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .margin-good { color: var(--ok); } .margin-low { color: var(--warn); }
+    code { word-break: break-all; }
+    iframe.preview { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
   </style>
 </head>
 <body>
@@ -42,6 +53,9 @@
     <button class="tab" aria-selected="true" data-tab="bookings">Parties</button>
     <button class="tab" aria-selected="false" data-tab="leads">Leads <span id="leadCount"></span></button>
     <button class="tab" aria-selected="false" data-tab="reports">Reports</button>
+    <button class="tab" aria-selected="false" data-tab="pricing">Pricing</button>
+    <button class="tab" aria-selected="false" data-tab="emails">Emails</button>
+    <button class="tab" aria-selected="false" data-tab="settings">Settings</button>
   </div>
 
   <section id="tab-bookings" class="card">
@@ -75,6 +89,48 @@
         <a class="btn ghost" href="/api/admin/export/bookings.csv" download="nxgs-bookings.csv">Bookings CSV</a>
         <a class="btn ghost" href="/api/admin/export/payments.csv" download="nxgs-payments.csv">Payments CSV</a>
       </div>
+    </div>
+  </section>
+  <section id="tab-pricing" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Pricing</h2>
+      <p class="muted">All prices are starting points — change them here anytime. New bookings use the new prices right away; parties already booked keep the price they were quoted. Costs are your estimates and are never shown to customers.</p>
+      <div class="row">
+        <div><label for="pDeposit">Deposit %</label><input id="pDeposit" type="number" min="1" max="100" data-party="depositPercent"></div>
+        <div><label for="pBalance">Balance due (days before party)</label><input id="pBalance" type="number" min="0" data-party="balanceDueDaysBefore"></div>
+      </div>
+      <label for="pTax">Sales tax %</label><input id="pTax" type="number" step="0.001" min="0" max="100" data-party="taxRatePercent" style="max-width:160px">
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Party packages</h2>
+      <div class="scroll"><table class="list price-table" id="pricePackages"></table></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Add-ons</h2>
+      <p class="muted">Lead time = days needed before the party; customers can't pick the item for sooner dates.</p>
+      <div class="scroll"><table class="list price-table" id="priceAddOns"></table></div>
+      <div class="savebar">
+        <button class="btn" id="priceSave" disabled>Save prices</button>
+        <span class="muted" id="priceMsg"></span>
+        <button class="btn ghost small" id="priceReset" style="margin-left:auto">Reset all to starting prices</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-emails" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">Emails</h2>
+      <p class="muted" id="emailMode"></p>
+      <p class="muted">Customers automatically get: booking confirmation, payment receipts, a balance reminder before it's due, a past-due notice, and a "see you tomorrow" email. Group/corporate inquiries get a "we got your request" reply. Staff get alerts for new parties, new leads and overdue balances.</p>
+      <div class="actions"><button class="btn ghost small" id="emailRun">Check reminders now</button></div>
+      <div class="scroll"><table class="list" id="emails"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">QuickBooks Online</h2>
+      <div id="qbo"></div>
     </div>
   </section>
 </main>
@@ -149,6 +205,7 @@ async function openBooking(id) {
     <h2>Money</h2>
     <table class="receipt">
       ${b.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ' × ' + l.qty : ''}${l.vendor ? `<br><span class="muted">${esc(l.vendor)}</span>` : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('')}
+      ${(() => { const ad = b.quote.lines.filter((l) => l.kind === 'addon'); if (!ad.length) return ''; const rev = ad.reduce((s, l) => s + l.totalCents, 0), cost = ad.reduce((s, l) => s + (l.costCents || 0) * l.qty, 0); return `<tr class="sub"><td>Add-ons est. cost ${money(cost)} · margin ${money(rev - cost)}</td><td></td></tr>`; })()}
       <tr class="sub"><td>Tax</td><td class="num">${money(b.quote.taxCents)}</td></tr>
       <tr class="total"><td>Total</td><td class="num">${money(b.total_cents)}</td></tr>
       ${b.payments.map((p) => `<tr><td>${esc(p.created_at.slice(0, 10))} · ${esc(p.kind)} · ${esc(p.method.replace(/_/g, ' '))}${p.note ? ' · ' + esc(p.note) : ''}</td><td class="num">−${money(p.amount_cents)}</td></tr>`).join('')}
@@ -211,12 +268,113 @@ async function loadLeads() {
   });
 }
 
-function refresh() { return Promise.all([loadSummary(), loadBookings(), loadLeads()]); }
+function refresh() { return Promise.all([loadSummary(), loadBookings(), loadLeads(), loadPricing(), loadEmails(), loadQbo()]); }
+
+// ---------- Pricing ----------
+let PRICING, priceEdits = { packages: {}, addOns: {}, party: {} };
+const dollarsIn = (c) => (c / 100).toFixed(2);
+async function loadPricing() {
+  PRICING = await api('/api/admin/pricing');
+  priceEdits = { packages: {}, addOns: {}, party: {} };
+  $('priceSave').disabled = true; $('priceMsg').textContent = '';
+  document.querySelectorAll('[data-party]').forEach((i) => { i.value = PRICING.party[i.dataset.party]; i.classList.remove('changed'); });
+  $('pricePackages').innerHTML = '<tr><th>On</th><th>Package</th><th>Price $</th><th>Kids incl.</th><th>Extra kid $</th></tr>' +
+    PRICING.packages.map((p) => `<tr>
+      <td><input type="checkbox" data-g="packages" data-id="${p.id}" data-f="active" ${p.active !== false ? 'checked' : ''}></td>
+      <td class="name"><input data-g="packages" data-id="${p.id}" data-f="name" value="${esc(p.name)}"></td>
+      <td><input type="number" step="0.01" min="0" data-g="packages" data-id="${p.id}" data-f="priceCents" data-money value="${dollarsIn(p.priceCents)}"></td>
+      <td><input type="number" min="1" data-g="packages" data-id="${p.id}" data-f="includedKids" value="${p.includedKids}"></td>
+      <td><input type="number" step="0.01" min="0" data-g="packages" data-id="${p.id}" data-f="extraKidCents" data-money value="${dollarsIn(p.extraKidCents)}"></td></tr>`).join('');
+  $('priceAddOns').innerHTML = PRICING.addOnCategories.map((c) => `<tr><th colspan="7" style="padding-top:18px">${esc(c.name)}</th></tr>
+    <tr><th>On</th><th>Item</th><th>Price $</th><th>Cost $</th><th>Margin</th><th>Min qty</th><th>Lead days</th></tr>` +
+    PRICING.addOns.filter((a) => a.category === c.id).map((a) => `<tr>
+      <td><input type="checkbox" data-g="addOns" data-id="${a.id}" data-f="active" ${a.active !== false ? 'checked' : ''}></td>
+      <td class="name">${esc(a.name)}<br><span class="muted">${esc(a.unit)}${a.vendor ? ' · ' + esc(a.vendor) : ''}</span></td>
+      <td><input type="number" step="0.01" min="0" data-g="addOns" data-id="${a.id}" data-f="priceCents" data-money value="${dollarsIn(a.priceCents)}"></td>
+      <td><input type="number" step="0.01" min="0" data-g="addOns" data-id="${a.id}" data-f="costCents" data-money value="${dollarsIn(a.costCents || 0)}"></td>
+      <td class="num" data-margin="${a.id}"></td>
+      <td><input type="number" min="0" data-g="addOns" data-id="${a.id}" data-f="minQty" value="${a.minQty || 0}"></td>
+      <td><input type="number" min="0" data-g="addOns" data-id="${a.id}" data-f="leadDays" value="${a.leadDays || 0}"></td></tr>`).join('')).join('');
+  PRICING.addOns.forEach((a) => showMargin(a.id));
+  document.querySelectorAll('#tab-pricing input').forEach((i) => i.oninput = i.onchange = () => onPriceEdit(i));
+}
+function showMargin(id) {
+  const row = (f) => document.querySelector(`[data-id="${id}"][data-f="${f}"]`);
+  const price = Number(row('priceCents').value), cost = Number(row('costCents').value);
+  const m = price > 0 ? Math.round((1 - cost / price) * 100) : 0;
+  const el = document.querySelector(`[data-margin="${id}"]`);
+  el.textContent = price > 0 ? m + '%' : '—';
+  el.className = 'num ' + (m >= 50 ? 'margin-good' : 'margin-low');
+}
+function onPriceEdit(i) {
+  i.classList.add('changed');
+  if (i.dataset.party) priceEdits.party[i.dataset.party] = i.value;
+  else {
+    const g = (priceEdits[i.dataset.g][i.dataset.id] ||= {});
+    g[i.dataset.f] = i.type === 'checkbox' ? i.checked : i.dataset.money !== undefined ? Math.round(Number(i.value) * 100) : i.value;
+    if (i.dataset.g === 'addOns') showMargin(i.dataset.id);
+  }
+  $('priceSave').disabled = false; $('priceMsg').textContent = 'Unsaved changes';
+}
+$('priceSave').onclick = async () => {
+  try { await api('/api/admin/pricing', 'PUT', priceEdits); await loadPricing(); $('priceMsg').textContent = 'Saved ✓ — new bookings use these prices now.'; }
+  catch (e) { $('priceMsg').textContent = e.message; }
+};
+$('priceReset').onclick = async () => {
+  if (!confirm('Put every price back to the starting prices?')) return;
+  await api('/api/admin/pricing/reset', 'POST', {}); await loadPricing(); $('priceMsg').textContent = 'Reset to starting prices.';
+};
+
+// ---------- Emails ----------
+async function loadEmails() {
+  const r = await api('/api/admin/emails');
+  $('emailMode').innerHTML = r.enabled ? '✅ Emails are being sent.' : '⚠️ Emails are <b>not being sent yet</b> — they are recorded here so you can preview them. Add a Resend API key to turn sending on (see README).';
+  $('emails').innerHTML = '<tr><th>When</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr>' +
+    (r.emails.map((e) => `<tr><td>${esc(e.created_at.slice(5, 16))}</td><td>${esc(e.to_addr)}</td><td>${esc(e.subject)}${e.error && e.status === 'failed' ? `<br><span class="muted">${esc(e.error)}</span>` : ''}</td>
+      <td><span class="pill ${e.status === 'sent' ? 'paid' : e.status === 'failed' ? 'cancelled' : 'pending'}">${esc(e.status.replace('_', ' '))}</span></td>
+      <td><button class="btn ghost small" data-preview="${e.id}">View</button>${r.enabled ? ` <button class="btn ghost small" data-resend="${e.id}">Resend</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No emails yet.</td></tr>');
+  $('emails').querySelectorAll('[data-preview]').forEach((b) => b.onclick = () => {
+    const d = $('detail');
+    d.innerHTML = `<iframe class="preview" src="/api/admin/emails/${b.dataset.preview}/preview"></iframe><div class="actions"><button class="btn ghost" onclick="this.closest('dialog').close()">Close</button></div>`;
+    d.showModal();
+  });
+  $('emails').querySelectorAll('[data-resend]').forEach((b) => b.onclick = async () => { await api(`/api/admin/emails/${b.dataset.resend}/resend`, 'POST', {}); setTimeout(loadEmails, 1500); });
+}
+$('emailRun').onclick = async () => { const r = await api('/api/admin/emails/run', 'POST', {}); await loadEmails(); alert(`${r.queued} reminder(s) queued, ${r.sent} sent.`); };
+
+// ---------- QuickBooks ----------
+async function loadQbo() {
+  const s = await api('/api/admin/quickbooks');
+  const params = new URLSearchParams(location.search);
+  const flash = params.get('qbo') === 'connected' ? '<p class="banner ok">QuickBooks connected.</p>' : params.get('qbo_error') ? `<p class="error">${esc(params.get('qbo_error'))}</p>` : '';
+  if (!s.configured) {
+    $('qbo').innerHTML = `${flash}<p>Not set up yet. Every payment the app takes is being saved and will be sent to QuickBooks once you connect.</p>
+      <ol class="muted"><li>Create a free app at developer.intuit.com (Accounting scope).</li>
+      <li>Add this redirect URI: <code>${esc(s.redirectUri)}</code></li>
+      <li>Set <code>QBO_CLIENT_ID</code>, <code>QBO_CLIENT_SECRET</code> and <code>QBO_ENVIRONMENT=production</code>, restart, then come back here and press Connect.</li></ol>
+      <p class="muted">Waiting to send: ${s.pending} payment(s).</p>`;
+    return;
+  }
+  if (!s.connected) {
+    $('qbo').innerHTML = `${flash}<p>Ready to connect (${esc(s.environment)}). ${s.pending} payment(s) waiting.</p><div class="actions"><a class="btn" href="/quickbooks/connect">Connect QuickBooks</a></div>`;
+    return;
+  }
+  $('qbo').innerHTML = `${flash}<p>✅ Connected to <b>${esc(s.company || 'QuickBooks')}</b> (${esc(s.environment)}). Each payment becomes a Sales Receipt under the customer.</p>
+    <p class="muted">Sent: ${s.synced} · Waiting: ${s.pending} · Problems: ${s.failed}. Reconnect by ${esc(s.reconnectBy)} (QuickBooks requires it about every 100 days; it renews automatically while the app is in use).</p>
+    ${s.failures.length ? '<table class="list"><tr><th>Booking</th><th class="num">Amount</th><th>Problem</th><th></th></tr>' + s.failures.map((f) => `<tr><td>${esc(f.ref)}</td><td class="num">${money(f.amount_cents)}</td><td>${esc(f.error)}</td><td><button class="btn ghost small" data-retry="${f.payment_id}">Retry</button></td></tr>`).join('') + '</table>' : ''}
+    <div class="actions"><button class="btn ghost" id="qboSync">Sync now</button><button class="btn ghost danger small" id="qboOff">Disconnect</button></div>`;
+  $('qboSync').onclick = async () => { await api('/api/admin/quickbooks/sync', 'POST', {}); loadQbo(); };
+  $('qboOff').onclick = async () => { if (confirm('Disconnect QuickBooks?')) { await api('/api/admin/quickbooks/disconnect', 'POST', {}); loadQbo(); } };
+  $('qbo').querySelectorAll('[data-retry]').forEach((b) => b.onclick = async () => { await api('/api/admin/quickbooks/retry/' + b.dataset.retry, 'POST', {}); loadQbo(); });
+}
 
 document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['bookings', 'leads', 'reports'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  ['bookings', 'leads', 'reports', 'pricing', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  history.replaceState(null, '', '#' + t.dataset.tab);
 });
+const startTab = location.hash.slice(1);
+if (startTab) document.querySelector(`.tab[data-tab="${startTab}"]`)?.click();
 $('fFrom').value = new Date().toLocaleDateString('en-CA');
 $('fGo').onclick = loadBookings;
 refresh().catch((e) => document.querySelector('main').insertAdjacentHTML('afterbegin', `<p class="error">${esc(e.message)}</p>`));
