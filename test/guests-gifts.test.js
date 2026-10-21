@@ -143,6 +143,18 @@ test('party details: what is needed depends on the add-ons; photo upload; comple
   } finally { t.close(); }
 });
 
+test('MVP includes a printed shirt for every child (plus any extra shirts added on)', async () => {
+  const t = await start();
+  try {
+    const { ref, t: tok } = await t.bookAndPay({ ...party, packageId: 'mvp', kids: 18, addOns: { shirts: 2 } });
+    const v = (await t.call('GET', `/api/bookings/${ref}?t=${tok}`)).json;
+    assert.equal(v.detailsStatus.needs.shirtSizes, 20);
+    assert.ok(v.detailsStatus.missing.includes('shirt sizes for all 20 shirts'));
+    await t.app.notifier.flush();
+    assert.ok(t.sentEmails.some((e) => /shirt sizes/.test(e.html)));
+  } finally { t.close(); }
+});
+
 test('text messages go only to families who opted in', async () => {
   assert.equal(toE164('(516) 555-0101'), '+15165550101');
   assert.equal(toE164('1-516-555-0101'), '+15165550101');

@@ -273,7 +273,7 @@
     const sat1 = nextDow(3, 6), sun1 = nextDow(3, 0), fri1 = nextDow(3, 5);
     const sat2 = nextDow(10, 6), sun2 = nextDow(10, 0), sat3 = nextDow(17, 6), sun3 = nextDow(17, 0), sat4 = nextDow(31, 6);
     // The showcase party: details filled in, guests replied, some waivers signed.
-    const show = book(sat3, '13:00', { pkg: 'mvp', kids: 16, addOns: { shirts: 16, scoreboard: 1, 'favor-box': 16, pizza: 2, [cookieId]: 16 }, host: 'Coach Mike',
+    const show = book(sat3, '13:00', { pkg: 'mvp', kids: 16, addOns: { scoreboard: 1, 'favor-box': 16, pizza: 2, [cookieId]: 16 }, host: 'Coach Mike',
       details: { theme: 'soccer', allergies: 'Liam: tree nuts', jerseyNumber: '7', shirtSizes: { YS: 4, YM: 8, YL: 4 } } });
     if (show) {
       sampleBooking = `/booking/${show.ref}?t=${show.token}`;

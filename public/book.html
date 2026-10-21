@@ -228,7 +228,8 @@ async function init() {
   });
 
   $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
-  $('packages').addEventListener('change', () => { showSchedule(); if ($('date').value) loadSlots(); });
+  $('packages').addEventListener('change', () => { showSchedule(); shirtRow(); if ($('date').value) loadSlots(); });
+  shirtRow();
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
   $('theme').innerHTML += CFG.themes.map((t) => `<option value="${t.id}">${t.emoji} ${t.name}</option>`).join('');
@@ -278,6 +279,16 @@ function formData() {
     email: $('email').value, phone: $('phone').value, notes: $('notes').value,
     locationId: LOCATION, theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
   };
+}
+
+// MVP already includes a printed shirt for every child, so the shirt add-on becomes "extra shirts" (siblings, parents).
+function shirtRow() {
+  const pkg = CFG.packages.find((p) => p.id === document.querySelector('input[name=package]:checked')?.value);
+  const row = document.querySelector('[data-row="shirts"]');
+  if (!row) return;
+  let note = row.querySelector('.incl-note');
+  if (!note) { note = document.createElement('small'); note.className = 'incl-note'; note.style.color = 'var(--ok)'; row.children[1].appendChild(note); }
+  note.textContent = pkg?.shirtsForAll ? `Every child already gets a shirt with ${pkg.name}. Add extras here for siblings or parents.` : '';
 }
 
 // The schedule depends on the package (Rookie is 90 minutes, the others 2 hours).

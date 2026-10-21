@@ -132,9 +132,10 @@ module.exports = {
         { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
         { key: 'food', label: 'Food & cake', minutes: 30 },
       ],
-      includes: "2 hours: 60 minutes of field play (3 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza and drinks for the kids\nA dedicated NXGS party host\nCustom shirt for the birthday child from Lifestyles Sports\nGoodie bag for every child (contents to be confirmed)\nTables, chairs, setup and cleanup",
+      includes: "2 hours: 60 minutes of field play (3 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza and drinks for the kids\nA dedicated NXGS party host\nPrinted party shirt for every child (one-color print by Lifestyles Sports; sizes collected after booking)\nGoodie bag for every child (contents to be confirmed)\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks, a party host, a custom shirt for the birthday child and goodie bags.',
+      description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks, a party host, a one-color printed shirt for every child and goodie bags.',
+      shirtsForAll: true, // one printed shirt per child; sizes go on the party details form
     },
   ],
 
