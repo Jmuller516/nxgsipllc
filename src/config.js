@@ -10,7 +10,9 @@ module.exports = {
     website: 'https://www.nxgs.net',
     email: 'joseph@nxgs.net',
     timezone: 'America/New_York',
-    address: 'Farmingdale, NY',   // TODO: full street address for invitations and directions
+    address: '388 Broad Hollow Rd, Farmingdale, NY',
+    // Second location (not bookable yet; for when the app supports more than one site):
+    // NXGS Massapequa, 400 Carman Mill Rd, Massapequa, NY
     phone: null,                  // front desk number shown to customers, e.g. '(516) 555-0100'
   },
 
