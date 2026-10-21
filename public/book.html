@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book a Party</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
+  <h1>Book your event</h1>
+  <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
+  <p id="cancelBanner" class="banner hidden">Payment was cancelled. Your time is held briefly; you can try again below.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="party">Kids birthday party</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="inquiry">Group &amp; corporate</button>
+  </div>
+
+  <!-- ============ KIDS PARTY ============ -->
+  <form id="partyForm" novalidate>
+    <div class="card">
+      <h2 style="margin-top:0">1. Choose a package</h2>
+      <div class="packages" id="packages"></div>
+      <label for="kids">How many kids?</label>
+      <input id="kids" name="kids" type="number" min="1" value="15" inputmode="numeric">
+      <p class="muted" id="kidsHint"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">2. Pick a date &amp; time</h2>
+      <label for="date">Party date</label>
+      <input id="date" name="date" type="date">
+      <p class="muted" id="daysHint"></p>
+      <div id="slotsWrap" class="hidden">
+        <label>Start time <span class="muted" id="lengthHint"></span></label>
+        <div class="slots" id="slots"></div>
+      </div>
+      <p class="muted" id="slotsMsg"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">3. Extras <span class="muted">(optional)</span></h2>
+      <div id="addons"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">4. Your details</h2>
+      <div class="row">
+        <div><label for="childName">Birthday child's name</label><input id="childName" autocomplete="off"></div>
+        <div><label for="childAge">Turning</label><input id="childAge" type="number" min="1" max="18" inputmode="numeric"></div>
+      </div>
+      <label for="parentName">Your name</label><input id="parentName" autocomplete="name" required>
+      <div class="row">
+        <div><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
+        <div><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" required></div>
+      </div>
+      <label for="notes">Anything we should know? <span class="muted">(allergies, theme…)</span></label>
+      <textarea id="notes" rows="3"></textarea>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Summary</h2>
+      <table class="receipt" id="summary"><tr><td class="muted">Choose a package and date to see your price.</td></tr></table>
+      <p class="muted" id="policy"></p>
+      <div id="formError" class="error hidden" role="alert"></div>
+      <div class="actions"><button class="btn" id="payBtn" type="submit" disabled>Continue to payment</button></div>
+    </div>
+  </form>
+
+  <!-- ============ INQUIRY ============ -->
+  <form id="inquiryForm" class="hidden" novalidate>
+    <div class="card">
+      <h2 style="margin-top:0">Tell us about your event</h2>
+      <p class="muted">Corporate outings, adult nights, senior groups and team skill building. We'll get back to you with a quote.</p>
+      <label for="eventType">Type of event</label><select id="eventType"></select>
+      <div class="row">
+        <div><label for="iName">Your name</label><input id="iName" autocomplete="name"></div>
+        <div><label for="iOrg">Organization / team <span class="muted">(optional)</span></label><input id="iOrg" autocomplete="organization"></div>
+      </div>
+      <div class="row">
+        <div><label for="iEmail">Email</label><input id="iEmail" type="email" autocomplete="email"></div>
+        <div><label for="iPhone">Phone</label><input id="iPhone" type="tel" autocomplete="tel"></div>
+      </div>
+      <div class="row">
+        <div><label for="iDate">Preferred date</label><input id="iDate" type="date"></div>
+        <div><label for="iSize">Group size</label><input id="iSize" type="number" min="1" inputmode="numeric"></div>
+      </div>
+      <label for="iMsg">Details</label><textarea id="iMsg" rows="4"></textarea>
+      <div id="inquiryError" class="error hidden" role="alert"></div>
+      <div class="actions"><button class="btn" type="submit">Send request</button></div>
+    </div>
+  </form>
+  <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0">Thanks — we got it!</h2><p>We'll reach out within one business day.</p></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+let CFG, selectedTime = null, quoteTimer;
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Something went wrong');
+  return d;
+}
+
+function ymdLocal(d) { return d.toLocaleDateString('en-CA'); }
+
+async function init() {
+  CFG = await api('/api/config');
+  $('bizName').textContent = CFG.business.name;
+  if (!CFG.stripe) $('demoBanner').classList.remove('hidden');
+  if (new URLSearchParams(location.search).get('cancelled')) $('cancelBanner').classList.remove('hidden');
+
+  $('packages').innerHTML = CFG.packages.map((p, i) => `
+    <label class="pkg"><input type="radio" name="package" value="${p.id}" ${i === 0 ? 'checked' : ''}>
+      <div class="top"><span>${p.name}</span><span>${money(p.priceCents)}</span></div>
+      <p>${p.description}</p></label>`).join('');
+  $('kids').max = CFG.party.maxKids;
+
+  $('addons').innerHTML = CFG.addOns.map((a) => `
+    <div class="addon"><div>${a.name}<small>${money(a.priceCents)}</small></div>
+      <input type="number" min="0" max="100" value="0" inputmode="numeric" data-addon="${a.id}" aria-label="${a.name} quantity"></div>`).join('');
+
+  const today = new Date();
+  const min = new Date(today); min.setDate(min.getDate() + CFG.minDaysAhead);
+  const max = new Date(today); max.setDate(max.getDate() + CFG.maxDaysAhead);
+  $('date').min = ymdLocal(min); $('date').max = ymdLocal(max);
+  const dayNames = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+  $('daysHint').textContent = 'Parties run ' + CFG.partyDays.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
+  const mins = CFG.party.phases.reduce((s, p) => s + p.minutes, 0);
+  $('lengthHint').textContent = `(${mins / 60} hours: ` + CFG.party.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
+  $('policy').textContent = `A ${CFG.payments.depositPercent}% non-refundable deposit reserves your party. The balance is due ${CFG.payments.balanceDueDaysBefore} days before. Parties booked within ${CFG.payments.balanceDueDaysBefore} days are paid in full.`;
+
+  $('eventType').innerHTML = CFG.inquiryTypes.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
+
+  document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
+    $('partyForm').classList.toggle('hidden', t.dataset.tab !== 'party');
+    $('inquiryForm').classList.toggle('hidden', t.dataset.tab !== 'inquiry');
+    $('inquiryDone').classList.add('hidden');
+  });
+
+  $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') loadSlots(); scheduleQuote(); });
+  $('partyForm').addEventListener('change', scheduleQuote);
+  $('partyForm').addEventListener('submit', submitParty);
+  $('inquiryForm').addEventListener('submit', submitInquiry);
+  scheduleQuote();
+}
+
+async function loadSlots() {
+  selectedTime = null;
+  const date = $('date').value;
+  $('slotsWrap').classList.add('hidden'); $('slotsMsg').textContent = '';
+  if (!date) return;
+  try {
+    const res = await api('/api/availability?date=' + date);
+    if (!res.open) { $('slotsMsg').textContent = "We don't run parties that day — please pick another date."; return; }
+    if (!res.slots.some((s) => s.available)) { $('slotsMsg').textContent = 'That day is fully booked. Please try another date.'; }
+    $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="' + s.reason + '"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
+    $('slots').querySelectorAll('.slot').forEach((b) => b.onclick = () => {
+      $('slots').querySelectorAll('.slot').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      selectedTime = b.dataset.time; scheduleQuote();
+    });
+    $('slotsWrap').classList.remove('hidden');
+  } catch (e) { $('slotsMsg').textContent = e.message; }
+}
+
+function formData() {
+  const addOns = {};
+  document.querySelectorAll('[data-addon]').forEach((i) => { if (Number(i.value) > 0) addOns[i.dataset.addon] = Number(i.value); });
+  return {
+    packageId: document.querySelector('input[name=package]:checked')?.value,
+    kids: Number($('kids').value), partyDate: $('date').value, time: selectedTime, addOns,
+    childName: $('childName').value, childAge: $('childAge').value, parentName: $('parentName').value,
+    email: $('email').value, phone: $('phone').value, notes: $('notes').value,
+  };
+}
+
+function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(updateQuote, 150); }
+
+async function updateQuote() {
+  const f = formData();
+  const pkg = CFG.packages.find((p) => p.id === f.packageId);
+  $('kidsHint').textContent = pkg ? `Includes ${pkg.includedKids} kids; ${money(pkg.extraKidCents)} per extra child (max ${CFG.party.maxKids}).` : '';
+  $('formError').classList.add('hidden');
+  if (!f.partyDate) { $('payBtn').disabled = true; return; }
+  try {
+    const q = await api('/api/quote', f);
+    const rows = q.lines.map((l) => `<tr><td>${l.name}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('');
+    $('summary').innerHTML = rows +
+      `<tr class="sub"><td>Subtotal</td><td class="num">${money(q.subtotalCents)}</td></tr>` +
+      `<tr class="sub"><td>${CFG.tax.label}</td><td class="num">${money(q.taxCents)}</td></tr>` +
+      `<tr class="total"><td>Total</td><td class="num">${money(q.totalCents)}</td></tr>` +
+      `<tr class="due"><td>${q.payInFull ? 'Due today (paid in full)' : `Due today (${CFG.payments.depositPercent}% deposit)`}</td><td class="num">${money(q.depositCents)}</td></tr>` +
+      (q.payInFull ? '' : `<tr><td class="muted">Balance due by ${new Date(q.balanceDueDate + 'T12:00').toLocaleDateString()}</td><td class="num muted">${money(q.balanceCents)}</td></tr>`);
+    $('payBtn').disabled = !selectedTime;
+    $('payBtn').textContent = selectedTime ? `Pay ${money(q.depositCents)} and reserve` : 'Pick a start time';
+  } catch (e) {
+    $('payBtn').disabled = true;
+    $('formError').textContent = e.message; $('formError').classList.remove('hidden');
+  }
+}
+
+async function submitParty(e) {
+  e.preventDefault();
+  const f = formData();
+  if (!f.parentName.trim() || !f.email.trim() || !f.phone.trim()) {
+    $('formError').textContent = 'Please fill in your name, email and phone.'; $('formError').classList.remove('hidden'); return;
+  }
+  $('payBtn').disabled = true; $('payBtn').textContent = 'Reserving…';
+  try {
+    const res = await api('/api/bookings', f);
+    // Stripe's payment page can't run inside an iframe, so leave the embed for the full window.
+    try { window.top.location.href = res.checkoutUrl; } catch { window.location.href = res.checkoutUrl; }
+  } catch (err) {
+    $('formError').textContent = err.message; $('formError').classList.remove('hidden');
+    loadSlots(); scheduleQuote();
+  }
+}
+
+async function submitInquiry(e) {
+  e.preventDefault();
+  $('inquiryError').classList.add('hidden');
+  try {
+    await api('/api/leads', {
+      eventType: $('eventType').value, name: $('iName').value, organization: $('iOrg').value, email: $('iEmail').value,
+      phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value, message: $('iMsg').value,
+    });
+    $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');
+  } catch (err) { $('inquiryError').textContent = err.message; $('inquiryError').classList.remove('hidden'); }
+}
+
+init().catch((e) => { document.querySelector('main').insertAdjacentHTML('beforeend', `<p class="error">${e.message}</p>`); });
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NXGS Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    main { max-width: 1100px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .tile b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+    .tile span { color: var(--muted); font-size: .85rem; }
+    .tile.alert b { color: var(--bad); }
+    table.list { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    table.list th { text-align: left; color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    table.list td { padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.list tr.click { cursor: pointer; }
+    table.list tr.click:hover { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pill { display: inline-block; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--line); }
+    .pill.confirmed, .pill.paid, .pill.booked { background: var(--ok-bg); color: var(--ok); }
+    .pill.pending, .pill.new, .pill.overdue { background: var(--warn-bg); color: var(--warn); }
+    .pill.cancelled, .pill.expired, .pill.lost { background: var(--bad-bg); color: var(--bad); }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+    .toolbar label { margin: 0 0 4px; }
+    .toolbar > div { min-width: 140px; }
+    dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); width: min(640px, calc(100vw - 32px)); padding: 22px; }
+    dialog::backdrop { background: rgb(0 0 0 / .45); }
+    .scroll { overflow-x: auto; }
+    @media (max-width: 700px) { .hide-sm { display: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">NXGS · Party &amp; events</p>
+  <h1>Admin</h1>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" aria-selected="true" data-tab="bookings">Parties</button>
+    <button class="tab" aria-selected="false" data-tab="leads">Leads <span id="leadCount"></span></button>
+    <button class="tab" aria-selected="false" data-tab="reports">Reports</button>
+  </div>
+
+  <section id="tab-bookings" class="card">
+    <div class="toolbar">
+      <div><label for="fFrom">From</label><input id="fFrom" type="date"></div>
+      <div><label for="fTo">To</label><input id="fTo" type="date"></div>
+      <div><label for="fStatus">Status</label>
+        <select id="fStatus"><option value="">Active</option><option value="all">All</option><option>confirmed</option><option>paid</option><option>pending</option><option>cancelled</option><option>expired</option></select></div>
+      <button class="btn ghost" id="fGo">Filter</button>
+    </div>
+    <div class="scroll"><table class="list" id="bookings"></table></div>
+  </section>
+
+  <section id="tab-leads" class="card hidden">
+    <div class="scroll"><table class="list" id="leads"></table></div>
+  </section>
+
+  <section id="tab-reports" class="hidden">
+    <div class="card">
+      <h2 style="margin-top:0">By month</h2>
+      <div class="scroll"><table class="list" id="byMonth"></table></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Vendor orders for upcoming parties</h2>
+      <div id="vendors"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Exports</h2>
+      <p class="muted">The payments export is laid out for QuickBooks Online sales-receipt import.</p>
+      <div class="actions">
+        <a class="btn ghost" href="/api/admin/export/bookings.csv" download="nxgs-bookings.csv">Bookings CSV</a>
+        <a class="btn ghost" href="/api/admin/export/payments.csv" download="nxgs-payments.csv">Payments CSV</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="detail"></dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+
+let SUMMARY;
+async function loadSummary() {
+  SUMMARY = await api('/api/admin/summary');
+  const s = SUMMARY;
+  $('tiles').innerHTML = `
+    <div class="tile"><b>${s.upcoming.n}</b><span>Upcoming parties</span></div>
+    <div class="tile"><b>${money(s.upcoming.t)}</b><span>Upcoming booked value</span></div>
+    <div class="tile"><b>${money(s.upcoming.owed)}</b><span>Balances still owed</span></div>
+    <div class="tile ${s.overdue.n ? 'alert' : ''}"><b>${s.overdue.n}</b><span>Overdue balances (${money(s.overdue.owed)})</span></div>
+    <div class="tile"><b>${money(s.collectedCents)}</b><span>Collected all-time</span></div>
+    <div class="tile ${s.newLeads ? 'alert' : ''}"><b>${s.newLeads}</b><span>New leads</span></div>`;
+  $('leadCount').textContent = s.newLeads ? `(${s.newLeads})` : '';
+  $('byMonth').innerHTML = '<tr><th>Month</th><th class="num">Parties</th><th class="num">Booked</th><th class="num">Collected</th></tr>' +
+    (s.byMonth.map((m) => `<tr><td>${esc(m.month)}</td><td class="num">${m.parties}</td><td class="num">${money(m.booked_cents)}</td><td class="num">${money(m.paid_cents)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No parties yet.</td></tr>');
+  $('vendors').innerHTML = s.vendors.length ? s.vendors.map((v) => `<p><b>${esc(v.vendor)}</b> — est. cost ${money(v.costCents)}<br>` +
+    Object.entries(v.items).map(([n, q]) => `${esc(n)} × ${q}`).join(' · ') + '</p>').join('') : '<p class="muted">No vendor items on upcoming parties.</p>';
+}
+
+async function loadBookings() {
+  const st = $('fStatus').value;
+  const qs = new URLSearchParams();
+  if ($('fFrom').value) qs.set('from', $('fFrom').value);
+  if ($('fTo').value) qs.set('to', $('fTo').value);
+  if (st && st !== 'all') qs.set('status', st);
+  let rows = await api('/api/admin/bookings?' + qs);
+  if (!st) rows = rows.filter((b) => ['pending', 'confirmed', 'paid'].includes(b.status));
+  $('bookings').innerHTML = '<tr><th>Date</th><th>Time</th><th>Party</th><th class="hide-sm">Package</th><th class="num hide-sm">Kids</th><th>Status</th><th class="num">Balance</th></tr>' +
+    (rows.map((b) => `<tr class="click" data-id="${b.id}">
+      <td>${esc(fmtDate(b.party_date))}</td><td>${esc(b.timeLabel)}</td>
+      <td>${esc(b.child_name || '—')}<br><span class="muted">${esc(b.parent_name)}</span></td>
+      <td class="hide-sm">${esc(b.packageName)}</td><td class="num hide-sm">${b.kids}</td>
+      <td><span class="pill ${esc(b.status)}">${esc(b.status)}</span>${b.balanceOverdue ? ' <span class="pill overdue">overdue</span>' : ''}</td>
+      <td class="num">${money(b.balanceCents)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No parties match.</td></tr>');
+  $('bookings').querySelectorAll('tr.click').forEach((tr) => tr.onclick = () => openBooking(tr.dataset.id));
+}
+
+async function openBooking(id) {
+  const b = await api('/api/admin/bookings/' + id);
+  const d = $('detail');
+  d.innerHTML = `
+    <p class="eyebrow">Booking ${esc(b.ref)} · <span class="pill ${esc(b.status)}">${esc(b.status)}</span></p>
+    <h2 style="margin-top:4px">${esc(b.child_name || 'Party')}${b.child_age ? ` (turning ${b.child_age})` : ''}</h2>
+    <dl class="facts">
+      <dt>When</dt><dd>${esc(fmtDate(b.party_date))}, ${esc(b.timeLabel)} – ${esc(b.endLabel)}</dd>
+      <dt>Package</dt><dd>${esc(b.packageName)} · ${b.kids} kids</dd>
+      <dt>Parent</dt><dd>${esc(b.parent_name)}</dd>
+      <dt>Email</dt><dd><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></dd>
+      <dt>Phone</dt><dd><a href="tel:${esc(b.phone)}">${esc(b.phone)}</a></dd>
+      ${b.notes ? `<dt>Notes</dt><dd style="white-space:pre-wrap">${esc(b.notes)}</dd>` : ''}
+    </dl>
+    <h2>Schedule</h2>
+    <ul class="schedule">${b.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
+    <h2>Money</h2>
+    <table class="receipt">
+      ${b.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ' × ' + l.qty : ''}${l.vendor ? `<br><span class="muted">${esc(l.vendor)}</span>` : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('')}
+      <tr class="sub"><td>Tax</td><td class="num">${money(b.quote.taxCents)}</td></tr>
+      <tr class="total"><td>Total</td><td class="num">${money(b.total_cents)}</td></tr>
+      ${b.payments.map((p) => `<tr><td>${esc(p.created_at.slice(0, 10))} · ${esc(p.kind)} · ${esc(p.method.replace(/_/g, ' '))}${p.note ? ' · ' + esc(p.note) : ''}</td><td class="num">−${money(p.amount_cents)}</td></tr>`).join('')}
+      <tr class="total"><td>Balance${b.balance_due_date ? ` (due ${esc(fmtDate(b.balance_due_date))})` : ''}</td><td class="num">${money(b.balanceCents)}</td></tr>
+    </table>
+    ${b.balanceCents > 0 && b.status !== 'cancelled' ? `
+      <h2>Take a payment at the desk</h2>
+      <div class="row">
+        <div><label for="pAmt">Amount ($)</label><input id="pAmt" type="number" step="0.01" min="0.01" value="${(b.balanceCents / 100).toFixed(2)}"></div>
+        <div><label for="pMethod">Method</label><select id="pMethod"><option value="card_in_person">Card (in person)</option><option value="cash">Cash</option><option value="check">Check</option></select></div>
+      </div>
+      <label for="pNote">Note</label><input id="pNote" placeholder="e.g. check #1042">
+      <div class="actions">
+        <button class="btn" id="pSave">Record payment</button>
+        <button class="btn ghost" id="pLink">Get online payment link</button>
+      </div>
+      <p id="linkOut" class="muted" style="word-break:break-all"></p>` : ''}
+    <div id="dErr" class="error hidden"></div>
+    <div class="actions">
+      ${!['cancelled', 'expired'].includes(b.status) ? '<button class="btn danger small" id="bCancel">Cancel party</button>' : ''}
+      <button class="btn ghost" id="dClose">Close</button>
+    </div>`;
+  const err = (e) => { $('dErr').textContent = e.message; $('dErr').classList.remove('hidden'); };
+  $('dClose').onclick = () => d.close();
+  if ($('pSave')) $('pSave').onclick = async () => {
+    try { await api(`/api/admin/bookings/${b.id}/payment`, 'POST', { amount: $('pAmt').value, method: $('pMethod').value, note: $('pNote').value }); d.close(); refresh(); } catch (e) { err(e); }
+  };
+  if ($('pLink')) $('pLink').onclick = async () => {
+    try {
+      const r = await api(`/api/admin/bookings/${b.id}/balance-link`, 'POST', {});
+      $('linkOut').innerHTML = `Send the customer their booking page — it has a Pay balance button:<br><a href="${esc(r.customerPage)}" target="_blank">${esc(r.customerPage)}</a>`;
+      navigator.clipboard?.writeText(r.customerPage).catch(() => {});
+    } catch (e) { err(e); }
+  };
+  if ($('bCancel')) $('bCancel').onclick = async () => {
+    const reason = prompt('Reason for cancelling? (Deposit is non-refundable; issue any refund in Stripe.)');
+    if (reason === null) return;
+    try { await api(`/api/admin/bookings/${b.id}/cancel`, 'POST', { reason }); d.close(); refresh(); } catch (e) { err(e); }
+  };
+  d.showModal();
+}
+
+async function loadLeads() {
+  const leads = await api('/api/admin/leads');
+  const types = { corporate: 'Corporate', adult: 'Adult', senior: 'Senior', team: 'Team skills', other: 'Other' };
+  $('leads').innerHTML = '<tr><th>Received</th><th>Type</th><th>Contact</th><th class="hide-sm">Date / size</th><th>Status</th><th class="hide-sm">Follow up</th></tr>' +
+    (leads.map((l) => `<tr>
+      <td>${esc(l.created_at.slice(0, 10))}</td>
+      <td>${esc(types[l.event_type] || l.event_type)}</td>
+      <td><b>${esc(l.name)}</b>${l.organization ? ` · ${esc(l.organization)}` : ''}<br>
+        <a href="mailto:${esc(l.email)}">${esc(l.email)}</a>${l.phone ? ` · <a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>` : ''}
+        ${l.message ? `<br><span class="muted">${esc(l.message)}</span>` : ''}</td>
+      <td class="hide-sm">${esc(fmtDate(l.preferred_date)) || '—'}${l.group_size ? `<br>${l.group_size} people` : ''}</td>
+      <td><select data-lead="${l.id}" data-field="status">${['new', 'contacted', 'quoted', 'booked', 'lost'].map((s) => `<option ${s === l.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+      <td class="hide-sm"><input type="date" data-lead="${l.id}" data-field="followUpDate" value="${esc(l.follow_up_date || '')}"></td>
+    </tr>`).join('') || '<tr><td colspan="6" class="muted">No leads yet.</td></tr>');
+  $('leads').querySelectorAll('[data-lead]').forEach((el) => el.onchange = async () => {
+    await api('/api/admin/leads/' + el.dataset.lead, 'PATCH', { [el.dataset.field]: el.value });
+    loadSummary();
+  });
+}
+
+function refresh() { return Promise.all([loadSummary(), loadBookings(), loadLeads()]); }
+
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
+  ['bookings', 'leads', 'reports'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+});
+$('fFrom').value = new Date().toLocaleDateString('en-CA');
+$('fGo').onclick = loadBookings;
+refresh().catch((e) => document.querySelector('main').insertAdjacentHTML('afterbegin', `<p class="error">${esc(e.message)}</p>`));
+</script>
+</body>
+</html>

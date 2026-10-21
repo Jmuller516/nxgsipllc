@@ -1,0 +1,13 @@
+{
+  "name": "nxgs-party-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Party and event booking for Next Generation Sports Complex (NXGS)",
+  "main": "src/server.js",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "demo": "ADMIN_PASSWORD=demo node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}
