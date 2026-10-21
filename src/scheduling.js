@@ -21,16 +21,17 @@ function label12(min) {
   return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function partyMinutes(cfg = config) {
-  return cfg.party.phases.reduce((s, p) => s + p.minutes, 0);
+/** Length of a party in minutes. `phases` = that package's schedule (default: the standard schedule). */
+function partyMinutes(cfg = config, phases = null) {
+  return (phases || cfg.party.phases).reduce((s, p) => s + p.minutes, 0);
 }
 
 /** Time windows a party starting at `start` occupies. */
-function windowsFor(start, cfg = config) {
-  const end = start + partyMinutes(cfg);
+function windowsFor(start, cfg = config, schedule = null) {
+  const end = start + partyMinutes(cfg, schedule);
   const phases = [];
   let t = start;
-  for (const p of cfg.party.phases) {
+  for (const p of schedule || cfg.party.phases) {
     phases.push({ key: p.key, label: p.label, start: t, end: t + p.minutes, exclusive: !!p.exclusive });
     t += p.minutes;
   }
@@ -41,11 +42,12 @@ const overlaps = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
 /**
  * Why can't a party start at `start`? Returns null if it can.
- * @param {number[]} existingStarts start minutes of parties already holding this date
+ * @param {Array<number|{start:number, phases?:object[]}>} existing parties already holding this date
+ * @param {object[]} [phases] the new party's schedule (its package)
  */
-function conflictReason(start, existingStarts, cfg = config) {
-  const cand = windowsFor(start, cfg);
-  const others = existingStarts.map((s) => windowsFor(s, cfg));
+function conflictReason(start, existing, cfg = config, phases = null) {
+  const cand = windowsFor(start, cfg, phases);
+  const others = existing.map((e) => (typeof e === 'number' ? windowsFor(e, cfg) : windowsFor(e.start, cfg, e.phases)));
 
   // 1) Exclusive rooms (the single video game room) can't overlap.
   for (const phase of cand.phases.filter((p) => p.exclusive)) {
@@ -74,7 +76,7 @@ function conflictReason(start, existingStarts, cfg = config) {
  * @param {string} dateYmd 'YYYY-MM-DD'
  * @param {number[]} existingStarts
  */
-function slotsForDate(dateYmd, existingStarts, cfg = config, blocks = []) {
+function slotsForDate(dateYmd, existingStarts, cfg = config, blocks = [], phases = null) {
   const [y, m, d] = dateYmd.split('-').map(Number);
   const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const hours = cfg.partyHours[weekday];
@@ -85,11 +87,11 @@ function slotsForDate(dateYmd, existingStarts, cfg = config, blocks = []) {
 
   const open = toMinutes(hours.open);
   const close = toMinutes(hours.close);
-  const length = partyMinutes(cfg);
+  const length = partyMinutes(cfg, phases);
   const slots = [];
   for (let s = open; s + length <= close; s += cfg.party.slotIntervalMinutes) {
     const blocked = blocks.some((b) => overlaps(s, s + length, b.startMin, b.endMin));
-    const reason = blocked ? 'Not available' : conflictReason(s, existingStarts, cfg);
+    const reason = blocked ? 'Not available' : conflictReason(s, existingStarts, cfg, phases);
     slots.push({ start: s, time: toHHMM(s), label: label12(s), endLabel: label12(s + length), available: !reason, reason });
   }
   return { open: true, slots };

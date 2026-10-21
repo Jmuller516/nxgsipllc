@@ -352,3 +352,23 @@ test('new add-ons: bagels, coffee, scoreboard and bounce house (one per party)',
   assert.ok(config.addOns.every((a) => a.includes), 'every add-on says what is included');
   assert.ok(config.packages.every((p) => p.includes));
 });
+
+test('Rookie Party is 90 minutes; its game room slot and end time follow its own schedule', () => {
+  const scheduling = require('../src/scheduling');
+  const q = pricing.quote({ packageId: 'rookie', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' });
+  assert.equal(q.minutes, 90);
+  assert.deepEqual(q.phases.map((p) => [p.label, p.minutes]), [['Field play (1 sport)', 30], ['Video game room', 30], ['Food, cake & presents', 30]]);
+  assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).minutes, 120);
+
+  const { svc } = setup('2026-11-01T14:00:00Z');
+  const b = svc.create({ ...guest, packageId: 'rookie', partyDate: '2026-11-28', time: '12:00' });
+  assert.equal(b.endLabel, '1:30 PM');
+  assert.deepEqual(b.schedule.map((s) => s.from), ['12:00 PM', '12:30 PM', '1:00 PM']);
+  // Rookie at noon uses the game room 12:30–1:00, so an All-Star at noon (game room 1:00–1:30) fits alongside it
+  const day = svc.availability('2026-11-28', null, 'allstar');
+  assert.equal(day.slots.find((s) => s.time === '12:00').available, true);
+  // a Rookie slot ends 90 minutes later, so later start times are offered than for 2-hour parties
+  assert.equal(svc.availability('2026-11-28', null, 'rookie').slots.at(-1).time, '18:30');
+  assert.equal(svc.availability('2026-11-28', null, 'allstar').slots.at(-1).time, '18:00');
+  assert.equal(scheduling.partyMinutes(config), 120, 'standard schedule unchanged');
+});

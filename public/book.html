@@ -30,11 +30,11 @@
   <!-- ============ KIDS PARTY ============ -->
   <form id="partyForm" novalidate>
     <div class="card">
-      <h2 style="margin-top:0">How the party goes</h2>
-      <div class="phases">
-        <figure><img src="/static/img/field.jpg" alt="Turf field" loading="lazy"><figcaption><b>60 min</b> Field play</figcaption></figure>
-        <figure><img src="/static/img/gameroom.jpg" alt="Video game room" loading="lazy"><figcaption><b>30 min</b> Video game room</figcaption></figure>
-        <figure><img src="/static/img/lounge.jpg" alt="Party lounge" loading="lazy"><figcaption><b>30 min</b> Food &amp; cake</figcaption></figure>
+      <h2 style="margin-top:0">How the party goes <span class="muted" id="partyLen"></span></h2>
+      <div class="phases" id="phaseStrip">
+        <figure><img src="/static/img/field.jpg" alt="Turf field" loading="lazy"><figcaption><b data-ph="play"></b> <span data-phl="play">Field play</span></figcaption></figure>
+        <figure><img src="/static/img/gameroom.jpg" alt="Video game room" loading="lazy"><figcaption><b data-ph="gameRoom"></b> <span data-phl="gameRoom">Video game room</span></figcaption></figure>
+        <figure><img src="/static/img/lounge.jpg" alt="Party lounge" loading="lazy"><figcaption><b data-ph="food"></b> <span data-phl="food">Food &amp; cake</span></figcaption></figure>
       </div>
       <h2>1. Choose a package</h2>
       <div class="packages" id="packages"></div>
@@ -210,8 +210,7 @@ async function init() {
   NXSponsors.mount($('sponsorBox'), 'booking', LOCATION);
   window.onLocationChange = () => { const ld = CFG.locations.find((l) => l.id === LOCATION).partyDays; $('daysHint').textContent = 'Parties run ' + ld.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'; loadSlots(); scheduleQuote(); };
   $('daysHint').textContent = 'Parties run ' + CFG.locations.find((l) => l.id === LOCATION).partyDays.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
-  const mins = CFG.party.phases.reduce((s, p) => s + p.minutes, 0);
-  $('lengthHint').textContent = `(${mins / 60} hours: ` + CFG.party.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
+  showSchedule();
   $('policy').textContent = `A ${CFG.payments.depositPercent}% non-refundable deposit reserves your party. The balance is due ${CFG.payments.balanceDueDaysBefore} days before. Parties booked within ${CFG.payments.balanceDueDaysBefore} days are paid in full.`;
 
   fetch('/api/partners/corporate').then((r) => r.json()).then((list) => {
@@ -229,6 +228,7 @@ async function init() {
   });
 
   $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
+  $('packages').addEventListener('change', () => { showSchedule(); if ($('date').value) loadSlots(); });
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
   $('theme').innerHTML += CFG.themes.map((t) => `<option value="${t.id}">${t.emoji} ${t.name}</option>`).join('');
@@ -247,12 +247,14 @@ async function init() {
 }
 
 async function loadSlots() {
+  const keep = selectedTime; // keep the chosen time if it still works for the new package
   selectedTime = null;
   const date = $('date').value;
   $('slotsWrap').classList.add('hidden'); $('slotsMsg').textContent = '';
   if (!date) return;
   try {
-    const res = await api(`/api/availability?date=${date}&location=${LOCATION}`);
+    const pkgId = document.querySelector('input[name=package]:checked')?.value || '';
+    const res = await api(`/api/availability?date=${date}&location=${LOCATION}&package=${pkgId}`);
     if (!res.open) { $('slotsMsg').textContent = "We don't run parties that day — please pick another date."; return; }
     if (!res.slots.some((s) => s.available)) { $('slotsMsg').textContent = 'That day is fully booked. Please try another date.'; }
     $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="Taken"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
@@ -261,6 +263,8 @@ async function loadSlots() {
       selectedTime = b.dataset.time; scheduleQuote();
     });
     $('slotsWrap').classList.remove('hidden');
+    const again = keep && $('slots').querySelector(`.slot[data-time="${keep}"]:not([disabled])`);
+    if (again) again.click();
   } catch (e) { $('slotsMsg').textContent = e.message; }
 }
 
@@ -274,6 +278,20 @@ function formData() {
     email: $('email').value, phone: $('phone').value, notes: $('notes').value,
     locationId: LOCATION, theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
   };
+}
+
+// The schedule depends on the package (Rookie is 90 minutes, the others 2 hours).
+function showSchedule() {
+  const pkg = CFG.packages.find((p) => p.id === document.querySelector('input[name=package]:checked')?.value) || CFG.packages[0];
+  const mins = pkg.phases.reduce((s, p) => s + p.minutes, 0);
+  const len = mins % 60 ? `${mins} minutes` : `${mins / 60} hours`;
+  $('partyLen').textContent = `· ${pkg.name}: ${len}`;
+  for (const ph of pkg.phases) {
+    const b = document.querySelector(`[data-ph="${ph.key}"]`), l = document.querySelector(`[data-phl="${ph.key}"]`);
+    if (b) b.textContent = `${ph.minutes} min`;
+    if (l) l.textContent = ph.label;
+  }
+  $('lengthHint').textContent = `(${len}: ` + pkg.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
 }
 
 function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(updateQuote, 150); }

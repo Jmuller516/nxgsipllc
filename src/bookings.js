@@ -36,14 +36,24 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return { ...cfg, partyHours: l.partyHours || cfg.partyHours, party: { ...cfg.party, maxConcurrentParties: l.maxConcurrentParties ?? cfg.party.maxConcurrentParties } };
   }
 
-  /** Start times already holding a slot on this date (paid, or unpaid within the hold window). */
+  /** A package's schedule (Rookie is shorter than the others). */
+  function phasesFor(packageId) {
+    return cfg.packages.find((p) => p.id === packageId)?.phases || cfg.party.phases;
+  }
+  /** The schedule a booking was made with (kept on its quote so later package edits don't move it). */
+  function bookingPhases(b) {
+    try { const q = typeof b.quote_json === 'string' ? JSON.parse(b.quote_json) : b.quote; if (q?.phases) return q.phases; } catch {}
+    return phasesFor(b.package_id);
+  }
+
+  /** Parties already holding a slot on this date (paid, or unpaid within the hold window), with their schedules. */
   function takenStarts(dateYmd, excludeId = null, locationId = null) {
     const rows = db.prepare(`
-      SELECT id, start_min FROM bookings
+      SELECT id, start_min, package_id, quote_json FROM bookings
       WHERE party_date = ? AND location_id = ?
         AND (status IN ('confirmed','paid') OR (status = 'pending' AND hold_expires_at > ?))
     `).all(dateYmd, location(locationId).id, nowIso());
-    return rows.filter((r) => r.id !== excludeId).map((r) => r.start_min);
+    return rows.filter((r) => r.id !== excludeId).map((r) => ({ start: r.start_min, phases: bookingPhases(r) }));
   }
 
   function blocksFor(dateYmd, locationId = null) {
@@ -58,9 +68,9 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return today;
   }
 
-  function availability(dateYmd, locationId = null) {
+  function availability(dateYmd, locationId = null, packageId = null) {
     validateDate(dateYmd);
-    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd, null, locationId), locCfg(locationId), blocksFor(dateYmd, locationId)));
+    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd, null, locationId), locCfg(locationId), blocksFor(dateYmd, locationId), packageId ? phasesFor(packageId) : null));
   }
 
   // Customers only see whether a time is open — never why (no names, no "game room booked").
@@ -119,7 +129,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     const info = db.prepare('INSERT INTO blocks (block_date, start_min, end_min, reason, location_id) VALUES (?, ?, ?, ?, ?)').run(date, startMin, endMin, clean(reason), locId);
     // Warn staff about parties already booked in the closed time.
     const clashes = list({ from: date, to: date, locationId: locId }).filter((b) => ['pending', 'confirmed', 'paid'].includes(b.status)
-      && b.start_min < endMin && b.start_min + scheduling.partyMinutes(cfg) > startMin);
+      && b.start_min < endMin && b.endMin > startMin);
     return { id: Number(info.lastInsertRowid), clashes: clashes.map((b) => `${b.timeLabel} ${b.child_name || b.parent_name} (${b.ref})`) };
   }
 
@@ -160,7 +170,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
     db.exec('BEGIN IMMEDIATE');
     try {
-      const slots = scheduling.slotsForDate(input.partyDate, takenStarts(input.partyDate, null, locId), lcfg, blocksFor(input.partyDate, locId));
+      const slots = scheduling.slotsForDate(input.partyDate, takenStarts(input.partyDate, null, locId), lcfg, blocksFor(input.partyDate, locId), q.phases);
       if (!slots.open) throw new BookingError(slots.closedReason ? "Sorry — we're closed that day. Please pick another date." : "We don't run parties on that day.");
       const slot = slots.slots.find((s) => s.start === start);
       if (!slot) throw new BookingError('That start time is not offered.');
@@ -353,8 +363,9 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
       quote,
       packageName: pkg ? pkg.name : b.package_id,
       timeLabel: scheduling.label12(b.start_min),
-      endLabel: scheduling.label12(b.start_min + scheduling.partyMinutes(cfg)),
-      schedule: scheduling.windowsFor(b.start_min, locCfg(b.location_id)).phases.map((p) => ({ label: p.label, from: scheduling.label12(p.start), to: scheduling.label12(p.end) })),
+      endMin: b.start_min + scheduling.partyMinutes(cfg, bookingPhases(b)),
+      endLabel: scheduling.label12(b.start_min + scheduling.partyMinutes(cfg, bookingPhases(b))),
+      schedule: scheduling.windowsFor(b.start_min, locCfg(b.location_id), bookingPhases(b)).phases.map((p) => ({ label: p.label, from: scheduling.label12(p.start), to: scheduling.label12(p.end) })),
       balanceCents,
       balanceOverdue: balanceCents > 0 && b.status === 'confirmed' && b.balance_due_date && b.balance_due_date < today,
     };
@@ -415,7 +426,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   }
 
-  return { location, locCfg, findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+  return { phasesFor, location, locCfg, findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
 }
 
 function clean(v) {

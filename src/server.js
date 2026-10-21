@@ -75,7 +75,7 @@ function createApp(db, opts = {}) {
     referral: config.referral,
     giftCards: config.giftCards,
     brand: { logoUrl: config.brand.logoUrl },
-    packages: config.packages.filter((p) => p.active !== false),
+    packages: config.packages.filter((p) => p.active !== false).map((p) => ({ ...p, phases: p.phases || config.party.phases })),
     addOns: config.addOns.filter((a) => a.active !== false).map(({ costCents, vendor, ...a }) => a), // never expose cost or vendor
     addOnCategories: config.addOnCategories,
     inquiryTypes: config.inquiryTypes.filter((t) => !t.hidden),
@@ -102,7 +102,7 @@ function createApp(db, opts = {}) {
     checkCode: (input) => quoteWithCode(input),
   }));
 
-  route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || ''), publicLocationId(query.location)));
+  route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || ''), publicLocationId(query.location), query.package || null));
 
   route('POST', '/api/quote', ({ body }) => quoteWithCode(body));
 
@@ -690,7 +690,7 @@ function createApp(db, opts = {}) {
     const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NXGS//Party App//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
       `X-WR-CALNAME:${text(config.business.shortName + ' Parties')}`, `X-WR-TIMEZONE:${tz}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT15M', 'X-PUBLISHED-TTL:PT15M'];
     for (const b of svc.list({ from, to }).filter((x) => ['confirmed', 'paid', 'pending'].includes(x.status))) {
-      const end = b.start_min + require('./scheduling').partyMinutes(config);
+      const end = b.endMin;
       const title = `${b.status === 'pending' ? '[HOLD] ' : ''}${config.locations.length > 1 ? `[${b.location.shortName}] ` : ''}${b.child_name ? `${b.child_name}'s party` : `${b.parent_name} party`} · ${b.kids} kids`;
       const desc = [`${b.packageName} · Booking ${b.ref}`, `Parent: ${b.parent_name} · ${b.phone} · ${b.email}`,
         b.schedule.map((s) => `${s.from} ${s.label}`).join('\n'),

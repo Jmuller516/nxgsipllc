@@ -58,7 +58,8 @@ function quote(input, cfg = config) {
   const balanceCents = totalCents - depositCents;
   const balanceDueDate = payInFull ? null : addDays(input.partyDate, -cfg.payments.balanceDueDaysBefore);
 
-  return { packageId: pkg.id, packageName: pkg.name, kids, lines, subtotalCents, taxCents, totalCents, depositCents, balanceCents, balanceDueDate, payInFull };
+  const phases = pkg.phases || cfg.party.phases;
+  return { packageId: pkg.id, packageName: pkg.name, phases, minutes: phases.reduce((s, p) => s + p.minutes, 0), kids, lines, subtotalCents, taxCents, totalCents, depositCents, balanceCents, balanceDueDate, payInFull };
 }
 
 function daysBetween(fromYmd, toYmd) {

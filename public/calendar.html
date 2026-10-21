@@ -162,7 +162,7 @@ async function showDay(date, quiet) {
   card.classList.remove('hidden');
   $('dayTitle').textContent = new Date(date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const open = res.slots.filter((s) => s.available);
-  $('dayHint').textContent = open.length ? 'Tap a start time to book. Every party is 2 hours.' : 'This day just filled up — please choose another.';
+  $('dayHint').textContent = open.length ? 'Tap a start time to book. Times shown are for 2-hour parties; the 90-minute Rookie Party fits too.' : 'This day just filled up — please choose another.';
   $('times').innerHTML = res.slots.map((s) => s.available
     ? `<a class="time" href="/book?date=${date}&time=${s.time}&location=${LOCATION}${embedded}">${s.label}<small>to ${s.endLabel}</small></a>`
     : `<span class="time taken">${s.label}<small>taken</small></span>`).join('');

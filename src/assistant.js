@@ -61,7 +61,7 @@ WHO YOU ARE
 FACTS (never invent others; if you don't know, offer a staff follow-up)
 - Locations taking party bookings: ${cfg.locations.filter((l) => l.public).map((l) => `${l.name}, ${l.address}`).join('; ')}. ${cfg.locations.filter((l) => !l.public).map((l) => `${l.name} is coming soon but isn't taking party bookings yet.`).join(' ')} All bookings in this chat are for ${cfg.locations.find((l) => l.id === cfg.defaultLocation).name}.
 - Today is ${dayName(today)} (${today}), time zone ${cfg.business.timezone}. Next four weeks: ${upcoming}.
-- Kids parties are 2 hours: ${cfg.party.phases.map((ph) => `${ph.minutes} min ${ph.label.toLowerCase()}`).join(', then ')}. Up to ${cfg.party.maxKids} kids.
+- Party length depends on the package: ${cfg.packages.filter((p) => p.active !== false).map((p) => { const ph = p.phases || cfg.party.phases; const m = ph.reduce((s, x) => s + x.minutes, 0); return `${p.name} is ${m % 60 ? m + ' minutes' : m / 60 + ' hours'} (${ph.map((x) => `${x.minutes} min ${x.label.toLowerCase()}`).join(', then ')})`; }).join('; ')}. Up to ${cfg.party.maxKids} kids.
 - Parties run ${hours}. Book at least ${cfg.minDaysAhead} days ahead; for anything sooner, offer a staff follow-up.
 - Packages:
 ${pkgs}
@@ -126,10 +126,10 @@ BOUNDARIES
     },
     {
       name: 'check_times',
-      description: 'List the open party start times on one date (each party is 2 hours). Returns open times, or says the day is closed or fully booked.',
-      input_schema: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['date'] },
+      description: 'List the open party start times on one date. Pass the package if known, since party length depends on it. Returns open times, or says the day is closed or fully booked.',
+      input_schema: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD' }, package_id: { type: 'string', enum: pkgIds() } }, required: ['date'] },
       run(input) {
-        const day = svc.availability(String(input.date || ''));
+        const day = svc.availability(String(input.date || ''), null, input.package_id || null);
         if (!day.open) return { date: input.date, open: false, note: 'No parties that day.' };
         const open = day.slots.filter((s) => s.available).map((s) => ({ start: s.time, label: `${s.label}–${s.endLabel}` }));
         return { date: input.date, open_times: open, note: open.length ? undefined : 'Fully booked.' };

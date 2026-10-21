@@ -96,9 +96,15 @@ module.exports = {
       priceCents: 45000,
       includedKids: 15,
       extraKidCents: 2500,
-      includes: "60 minutes of field play on the turf\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nTables, chairs and setup\nCleanup after the party",
+      // Rookie is 90 minutes; the other packages use the standard 2-hour schedule above.
+      phases: [
+        { key: 'play', label: 'Field play (1 sport)', minutes: 30 },
+        { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
+        { key: 'food', label: 'Food, cake & presents', minutes: 30 },
+      ],
+      includes: "30 minutes of field play (1 sport)\n30 minutes in the video game room\n30 minutes in the party room for food, cake and presents\nTables, chairs and setup\nCleanup after the party",
       taxable: true,
-      description: '2 hours: 60 min field play, 30 min video game room, 30 min party room. Up to 15 kids.',
+      description: '90 minutes: 30 min field play (1 sport), 30 min video game room, 30 min food, cake & presents. Up to 15 kids.',
     },
     {
       id: 'allstar',
@@ -106,9 +112,9 @@ module.exports = {
       priceCents: 55000,
       includedKids: 15,
       extraKidCents: 2500,
-      includes: "Everything in the Rookie Party\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host",
+      includes: "2 hours: 60 minutes of field play\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: 'Everything in Rookie plus pizza & drinks for the kids and a dedicated party host.',
+      description: '2 hours: 60 min field play, 30 min video game room, 30 min food & cake, plus pizza, drinks and a dedicated party host.',
     },
     {
       id: 'mvp',
