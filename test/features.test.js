@@ -359,6 +359,8 @@ test('Rookie Party is 90 minutes; its game room slot and end time follow its own
   assert.equal(q.minutes, 90);
   assert.deepEqual(q.phases.map((p) => [p.label, p.minutes]), [['Field play (1 sport)', 30], ['Video game room', 30], ['Food, cake & presents', 30]]);
   assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).minutes, 120);
+  assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).phases[0].label, 'Field play (2 sports)');
+  assert.equal(pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).phases[0].label, 'Field play (3 sports)');
 
   const { svc } = setup('2026-11-01T14:00:00Z');
   const b = svc.create({ ...guest, packageId: 'rookie', partyDate: '2026-11-28', time: '12:00' });

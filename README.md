@@ -29,7 +29,7 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - See only the start times that are actually open. The scheduler enforces:
   - two parties at once, at most
   - one video game room, never double-booked
-  - each package's own schedule: Rookie is 90 minutes (30 min play, 1 sport → 30 min game room → 30 min food, cake & presents); All-Star and MVP are 2 hours (60 → 30 → 30)
+  - each package's own schedule: Rookie is 90 minutes (30 min play, 1 sport → 30 min game room → 30 min food, cake & presents); All-Star and MVP are 2 hours (60 min play with 2 sports for All-Star or 3 sports for MVP → 30 → 30)
   - 15 min cleanup between parties
 - Add extras: food (Calabria Pizza, Amia's Deli), plus all 20 favors and decorations from the NXGS Birthday Add-Ons guide. Each item has its minimum order and lead time, and items that can't be made in time for the chosen date are greyed out.
 - Pay a **25% non-refundable deposit** through Stripe. Parties booked within 7 days are paid in full.

@@ -112,9 +112,14 @@ module.exports = {
       priceCents: 55000,
       includedKids: 15,
       extraKidCents: 2500,
-      includes: "2 hours: 60 minutes of field play\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
+      phases: [
+        { key: 'play', label: 'Field play (2 sports)', minutes: 60 },
+        { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
+        { key: 'food', label: 'Food & cake', minutes: 30 },
+      ],
+      includes: "2 hours: 60 minutes of field play (2 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: '2 hours: 60 min field play, 30 min video game room, 30 min food & cake, plus pizza, drinks and a dedicated party host.',
+      description: '2 hours: 60 min field play (2 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks and a dedicated party host.',
     },
     {
       id: 'mvp',
@@ -122,9 +127,14 @@ module.exports = {
       priceCents: 69500,
       includedKids: 15,
       extraKidCents: 2500,
-      includes: "Everything in the All-Star Party\nCustom shirt for the birthday child from Lifestyles Sports\nGoodie bag for every child (contents to be confirmed)",
+      phases: [
+        { key: 'play', label: 'Field play (3 sports)', minutes: 60 },
+        { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
+        { key: 'food', label: 'Food & cake', minutes: 30 },
+      ],
+      includes: "2 hours: 60 minutes of field play (3 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza and drinks for the kids\nA dedicated NXGS party host\nCustom shirt for the birthday child from Lifestyles Sports\nGoodie bag for every child (contents to be confirmed)\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: 'Everything in All-Star plus a custom shirt for the birthday kid and goodie bags.',
+      description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks, a party host, a custom shirt for the birthday child and goodie bags.',
     },
   ],
 
