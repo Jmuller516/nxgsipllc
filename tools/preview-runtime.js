@@ -121,7 +121,7 @@
         status: 200, headers: {},
         setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
         writeHead(s, h = {}) { this.status = s; for (const [k, v] of Object.entries(h)) this.headers[k.toLowerCase()] = v; },
-        end(b) { resolve({ status: this.status, headers: this.headers, body: b == null ? '' : String(b) }); },
+        end(b) { resolve({ status: this.status, headers: this.headers, body: b == null ? '' : b instanceof Uint8Array ? b : String(b) }); },
       };
       app.handle(req, res);
     });
@@ -153,6 +153,10 @@
         if (!act) return;
         e.preventDefault(); P.navigate(act, (f.getAttribute('method') || 'GET').toUpperCase());
       }, true);
+      function fixImgs(root){ var list = root.matches && root.matches('img[src^="/"]') ? [root] : []; (root.querySelectorAll ? root.querySelectorAll('img[src^="/"]') : []).forEach(function(i){ list.push(i); }); list.forEach(function(img){ var s = img.getAttribute('src'); img.removeAttribute('src'); P.asset(s).then(function(u){ if (u) img.src = u; }); }); }
+      fixImgs(document);
+      new MutationObserver(function(ms){ ms.forEach(function(m){ if (m.type === 'attributes') { var s = m.target.getAttribute('src'); if (s && s.charAt(0) === '/') fixImgs(m.target); } else m.addedNodes.forEach(function(n){ if (n.nodeType === 1) fixImgs(n); }); }); })
+        .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
       function fixFrames(root){ (root.querySelectorAll ? root.querySelectorAll('iframe[src^="/"]') : []).forEach(function(f){ var s = f.getAttribute('src'); f.removeAttribute('src'); P.fetch(s).then(function(r){ return r.text(); }).then(function(t){ f.srcdoc = t; }); }); }
       new MutationObserver(function(ms){ ms.forEach(function(m){ m.addedNodes.forEach(function(n){ if (n.nodeType === 1) { if (n.matches('iframe[src^="/"]')) fixFrames(n.parentNode); else fixFrames(n); } }); }); })
         .observe(document.documentElement, { childList: true, subtree: true });
@@ -209,6 +213,12 @@
       return new Response(r.body, { status: r.status, headers: r.headers });
     },
     navigate: (u, m) => navigate(u, m),
+    async asset(path) {
+      if (IMAGES[path]) return IMAGES[path];
+      const r = await call('GET', toPath(path));
+      if (r.status !== 200) return null;
+      return URL.createObjectURL(new Blob([r.body], { type: r.headers['content-type'] || 'application/octet-stream' }));
+    },
     toast,
   };
 

@@ -109,6 +109,12 @@
       <div class="actions"><button class="btn" type="submit">Send request</button></div>
     </div>
   </form>
+  <dialog id="zoom" class="zoom">
+    <img id="zoomImg" alt="">
+    <h2 id="zoomName"></h2>
+    <p class="muted" id="zoomDetail"></p>
+    <form method="dialog"><button class="btn ghost">Close</button></form>
+  </dialog>
   <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0">Thanks — we got it!</h2><p>We'll reach out within one business day.</p></div>
 </main>
 
@@ -148,12 +154,20 @@ async function init() {
     if (!items.length) return '';
     return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${c.name} <span class="muted" data-count="${c.id}"></span></summary>` +
       items.map((a) => `
-      <div class="addon" data-row="${a.id}"><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}
+      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="See ${a.name}"><img src="${a.photo}" alt="${a.name}" loading="lazy"></button><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}
           <small><b>${money(a.priceCents)}</b> ${a.unit === 'each' ? 'each' : '/ ' + a.unit}${a.minQty > 1 ? ` · min ${a.minQty}` : ''}${a.leadDays ? ` · order ${a.leadDays >= 28 ? '4 weeks' : a.leadDays >= 14 ? '2 weeks' : a.leadDays + ' days'} ahead` : ''}</small>
           <small class="lead-warn hidden">Not enough time before this date</small></div>
         <input type="number" min="0" max="200" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${a.name} quantity"></div>`).join('') +
       '</details>';
   }).join('');
+  // Tap a product photo to see it larger.
+  document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => {
+    const a = CFG.addOns.find((x) => x.id === b.dataset.zoom);
+    $('zoomImg').src = a.photo; $('zoomImg').alt = a.name;
+    $('zoomName').textContent = a.name;
+    $('zoomDetail').textContent = [a.detail, `$${(a.priceCents / 100).toFixed(2)} ${a.unit === 'each' ? 'each' : 'per ' + a.unit}`, a.minQty > 1 ? `minimum ${a.minQty}` : ''].filter(Boolean).join(' · ');
+    $('zoom').showModal();
+  }));
   // Jump straight to the minimum (or one per kid for favors) instead of making people tap 12 times.
   document.querySelectorAll('[data-addon]').forEach((inp) => inp.addEventListener('change', () => {
     const v = Number(inp.value), min = Number(inp.dataset.min);

@@ -103,6 +103,14 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
     );
     CREATE INDEX IF NOT EXISTS idx_blocks_date ON blocks(block_date);
 
+    -- Uploaded images (e.g. product photos for add-ons).
+    CREATE TABLE IF NOT EXISTS media (
+      id              TEXT PRIMARY KEY,
+      content_type    TEXT NOT NULL,
+      bytes           BLOB NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Small key/value store (QuickBooks connection tokens, etc.)
     CREATE TABLE IF NOT EXISTS settings (
       key             TEXT PRIMARY KEY,

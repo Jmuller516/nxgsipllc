@@ -303,3 +303,41 @@ test('HTTP: calendar page, calendar API and private Google Calendar feed', async
     server.close();
   }
 });
+
+test('HTTP: product photos upload, show on the booking page, and can be removed', async () => {
+  const http = require('node:http');
+  const { createApp } = require('../src/server');
+  process.env.ADMIN_PASSWORD = 'secret';
+  const db = open(':memory:');
+  const app = createApp(db, { clock: () => new Date('2026-11-01T14:00:00Z'), background: false });
+  const server = http.createServer(app.handle).listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const auth = { Authorization: 'Basic ' + Buffer.from('admin:secret').toString('base64'), 'Content-Type': 'application/json' };
+  try {
+    let cfg = await (await fetch(`${base}/api/config`)).json();
+    assert.equal(cfg.addOns.find((a) => a.id === 'medal').photo, '/static/img/addons/medal.svg');
+    assert.equal((await fetch(`${base}/static/img/addons/medal.svg`)).headers.get('content-type'), 'image/svg+xml');
+
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const bad = await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'POST', headers: auth, body: JSON.stringify({ dataUrl: 'data:text/html;base64,PGI+' }) });
+    assert.equal(bad.status, 400);
+    const up = await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'POST', headers: auth, body: JSON.stringify({ dataUrl: 'data:image/png;base64,' + png.toString('base64') }) });
+    assert.equal(up.status, 200);
+    cfg = await (await fetch(`${base}/api/config`)).json();
+    const photo = cfg.addOns.find((a) => a.id === 'medal').photo;
+    assert.match(photo, /^\/media\/[a-f0-9]+\.png$/);
+    const img = await fetch(base + photo);
+    assert.equal(img.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await img.arrayBuffer()), png);
+
+    // Resetting prices keeps photos; removing the photo brings back the illustration.
+    await fetch(`${base}/api/admin/pricing/reset`, { method: 'POST', headers: auth, body: '{}' });
+    assert.equal((await (await fetch(`${base}/api/config`)).json()).addOns.find((a) => a.id === 'medal').photo, photo);
+    await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'DELETE', headers: auth });
+    assert.equal((await (await fetch(`${base}/api/config`)).json()).addOns.find((a) => a.id === 'medal').photo, '/static/img/addons/medal.svg');
+    assert.equal((await fetch(base + photo)).status, 404);
+    assert.equal((await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+  } finally {
+    server.close();
+  }
+});

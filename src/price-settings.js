@@ -37,7 +37,7 @@ function load(db) {
 function apply(db, cfg = config) {
   const o = load(db);
   cfg.packages.splice(0, cfg.packages.length, ...defaults.packages.map((p) => ({ active: true, ...p, ...(o.packages[p.id] || {}) })));
-  cfg.addOns.splice(0, cfg.addOns.length, ...defaults.addOns.map((a) => ({ active: true, ...a, ...(o.addOns[a.id] || {}) })));
+  cfg.addOns.splice(0, cfg.addOns.length, ...defaults.addOns.map((a) => ({ active: true, photo: `/static/img/addons/${a.id}.svg`, ...a, ...(o.addOns[a.id] || {}) })));
   Object.assign(cfg.payments, defaults.payments, pick(o.party, ['depositPercent', 'balanceDueDaysBefore']));
   cfg.tax.rate = o.party.taxRatePercent != null ? o.party.taxRatePercent / 100 : defaults.tax.rate;
   return cfg;
@@ -71,8 +71,26 @@ function save(db, edits, cfg = config) {
   return apply(db, cfg);
 }
 
+/** Set (or with null, remove) an add-on's uploaded product photo. Returns the old photo path. */
+function setPhoto(db, id, photoPath, cfg = config) {
+  if (!defaults.addOns.some((a) => a.id === id)) throw new Error(`Unknown item: ${id}`);
+  const o = load(db);
+  const old = o.addOns[id]?.photo || null;
+  const target = (o.addOns[id] ||= {});
+  if (photoPath) target.photo = photoPath; else delete target.photo;
+  db.prepare(`INSERT INTO settings (key, value) VALUES ('price_overrides', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`).run(JSON.stringify(o));
+  apply(db, cfg);
+  return old;
+}
+
 function reset(db, cfg = config) {
+  // Keep uploaded photos when resetting prices.
+  const photos = Object.fromEntries(Object.entries(load(db).addOns).filter(([, v]) => v.photo).map(([k, v]) => [k, { photo: v.photo }]));
   db.prepare("DELETE FROM settings WHERE key = 'price_overrides'").run();
+  if (Object.keys(photos).length) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('price_overrides', ?)").run(JSON.stringify({ packages: {}, addOns: photos, party: {} }));
+  }
   return apply(db, cfg);
 }
 
@@ -86,4 +104,4 @@ function view(cfg = config) {
   };
 }
 
-module.exports = { apply, save, reset, view };
+module.exports = { apply, save, reset, view, setPhoto };

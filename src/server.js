@@ -143,6 +143,31 @@ function createApp(db, opts = {}) {
     try { priceSettings.save(db, body); } catch (e) { throw new BookingError(e.message); }
     return priceSettings.view();
   }, { admin: true });
+  // Product photos for add-ons: the admin page sends a resized JPEG/PNG/WebP as a data URL.
+  route('POST', '/api/admin/addons/:id/photo', ({ params, body }) => {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(body.dataUrl || ''));
+    if (!m) throw new BookingError('Please choose a JPEG, PNG or WebP photo.');
+    const bytes = Buffer.from(m[2], 'base64');
+    if (bytes.length > 2_000_000) throw new BookingError('That photo is too large. Please use one under 2 MB.');
+    const id = crypto.randomBytes(10).toString('hex');
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[m[1]];
+    db.prepare('INSERT INTO media (id, content_type, bytes) VALUES (?, ?, ?)').run(id, m[1], bytes);
+    let old;
+    try { old = priceSettings.setPhoto(db, params.id, `/media/${id}.${ext}`); } catch (e) { throw new BookingError(e.message); }
+    removeMedia(old);
+    return priceSettings.view();
+  }, { admin: true });
+  route('DELETE', '/api/admin/addons/:id/photo', ({ params }) => {
+    let old;
+    try { old = priceSettings.setPhoto(db, params.id, null); } catch (e) { throw new BookingError(e.message); }
+    removeMedia(old);
+    return priceSettings.view();
+  }, { admin: true });
+  function removeMedia(path) {
+    const mm = /^\/media\/([a-f0-9]+)\./.exec(path || '');
+    if (mm) db.prepare('DELETE FROM media WHERE id = ?').run(mm[1]);
+  }
+
   route('POST', '/api/admin/pricing/reset', () => { priceSettings.reset(db); return priceSettings.view(); }, { admin: true });
 
   // Emails
@@ -310,6 +335,13 @@ function createApp(db, opts = {}) {
         }
       }
       if (pathname === '/healthz') return send(res, { ok: true });
+      const media = /^\/media\/([a-f0-9]+)\.(?:jpg|png|webp)$/.exec(pathname);
+      if (req.method === 'GET' && media) {
+        const row = db.prepare('SELECT content_type, bytes FROM media WHERE id = ?').get(media[1]);
+        if (!row) return send(res, { error: 'Not found' }, 404);
+        res.writeHead(200, { 'Content-Type': row.content_type, 'Cache-Control': 'public, max-age=31536000, immutable' });
+        return res.end(Buffer.from(row.bytes));
+      }
 
       // API
       for (const r of routes) {
@@ -317,7 +349,7 @@ function createApp(db, opts = {}) {
         const m = r.re.exec(pathname);
         if (!m) continue;
         if (r.admin && !adminOk(req)) return send(res, { error: 'Admin login required' }, 401);
-        const rawBody = ['POST', 'PATCH', 'PUT'].includes(req.method) ? await readBody(req) : '';
+        const rawBody = ['POST', 'PATCH', 'PUT'].includes(req.method) ? await readBody(req, pathname.endsWith('/photo') ? 3_000_000 : 100_000) : '';
         let body = {};
         if (rawBody && !pathname.startsWith('/webhooks/')) {
           try { body = JSON.parse(rawBody); } catch { throw new BookingError('Invalid request.'); }
@@ -486,13 +518,13 @@ function csv(header, rows) {
   return { __csv: [header, ...rows].map((r) => r.map(cell).join(',')).join('\n') };
 }
 
-function readBody(req) {
+function readBody(req, limit = 100_000) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > 100_000) { reject(new BookingError('Request too large.')); req.destroy(); }
+      if (size > limit) { reject(new BookingError('Request too large.')); req.destroy(); }
       else chunks.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));

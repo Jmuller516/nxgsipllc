@@ -29,6 +29,7 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - Record desk payments (card, cash, check) and cancel parties
 - Lead tracker: new → contacted → quoted → booked/lost, with follow-up dates
 - Reports: revenue by month, plus **vendor order totals** with estimated costs for upcoming parties
+- **Product photos**: every add-on shows a photo on the booking page, and customers can tap it to see it larger. Each item starts with an illustration. Upload the real product photo from the Pricing tab (**Add photo** on any item, right from your phone). Photos are resized automatically and kept when you reset prices.
 - **Pricing tab**: change any price, cost, minimum, lead time, deposit %, balance due days or tax rate, and turn items on/off. No code changes needed, and add-on margins show as you type.
 - **Chats tab**: every chat conversation, with which ones turned into bookings or leads.
 - **Emails tab**: every email sent (or that would be sent), with a preview and a resend button. Staff get alerts for new parties, new leads and overdue balances.
@@ -49,7 +50,7 @@ You need **Node.js 22.13 or newer**. There are no other dependencies, so you don
 
 ```bash
 npm run demo     # admin password "demo", payments simulated
-npm test         # 29 automated tests
+npm test         # 30 automated tests
 node tools/build-preview.js   # one-file clickable preview (preview.html)
 ```
 

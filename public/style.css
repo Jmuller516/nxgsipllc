@@ -123,3 +123,14 @@ body.embedded #bizName, body.embedded #logo { display: none; }
 .phases figcaption { font-size: .82rem; margin-top: 5px; line-height: 1.3; }
 .phases figcaption b { display: block; color: var(--brand); font-variant-numeric: tabular-nums; }
 body.embedded .hero { display: none; }
+
+/* Add-on product photos */
+.addon > div { flex: 1; min-width: 0; }
+.addon-pic { flex: none; width: 72px; height: 54px; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); cursor: zoom-in; }
+.addon-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.addon.unavailable .addon-pic { opacity: .5; }
+.zoom { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--ink); width: min(520px, calc(100vw - 32px)); padding: 16px; }
+.zoom::backdrop { background: rgb(0 0 0 / .5); }
+.zoom img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 10px; background: var(--bg); display: block; }
+.zoom h2 { margin: 12px 0 4px; }
+.zoom form { margin: 12px 0 0; }
