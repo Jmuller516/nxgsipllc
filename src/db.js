@@ -92,6 +92,17 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
       sent_at         TEXT
     );
 
+    -- Days or times staff have closed (holidays, tournaments, private events).
+    CREATE TABLE IF NOT EXISTS blocks (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      block_date      TEXT NOT NULL,             -- YYYY-MM-DD
+      start_min       INTEGER NOT NULL DEFAULT 0,
+      end_min         INTEGER NOT NULL DEFAULT 1440,
+      reason          TEXT,                      -- shown to staff only
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_blocks_date ON blocks(block_date);
+
     -- Small key/value store (QuickBooks connection tokens, etc.)
     CREATE TABLE IF NOT EXISTS settings (
       key             TEXT PRIMARY KEY,

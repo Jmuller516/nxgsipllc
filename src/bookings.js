@@ -33,6 +33,10 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return rows.filter((r) => r.id !== excludeId).map((r) => r.start_min);
   }
 
+  function blocksFor(dateYmd) {
+    return db.prepare('SELECT start_min AS startMin, end_min AS endMin, reason FROM blocks WHERE block_date = ?').all(dateYmd);
+  }
+
   function validateDate(dateYmd) {
     const today = todayLocal(clock(), cfg.business.timezone);
     const days = pricing.daysBetween(today, dateYmd);
@@ -43,7 +47,69 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
   function availability(dateYmd) {
     validateDate(dateYmd);
-    return scheduling.slotsForDate(dateYmd, takenStarts(dateYmd), cfg);
+    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd), cfg, blocksFor(dateYmd)));
+  }
+
+  // Customers only see whether a time is open — never why (no names, no "game room booked").
+  function publicSlots(day) {
+    const { closedReason, ...rest } = day;
+    return { ...rest, slots: day.slots.map(({ reason, ...s }) => s) };
+  }
+
+  /**
+   * Month view for the public calendar: how many start times are open each day.
+   * @param {string} month 'YYYY-MM'
+   */
+  function calendarMonth(month) {
+    if (!/^\d{4}-\d{2}$/.test(String(month))) throw new BookingError('Invalid month.');
+    const [y, m] = month.split('-').map(Number);
+    const today = todayLocal(clock(), cfg.business.timezone);
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${month}-${String(d).padStart(2, '0')}`;
+      const ahead = pricing.daysBetween(today, date);
+      const bookable = ahead >= cfg.minDaysAhead && ahead <= cfg.maxDaysAhead;
+      const day = scheduling.slotsForDate(date, takenStarts(date), cfg, blocksFor(date));
+      const total = day.slots.length;
+      const available = day.slots.filter((s) => s.available).length;
+      let status;
+      if (ahead < 0) status = 'past';
+      else if (!day.open) status = 'closed';
+      else if (!bookable) status = ahead < cfg.minDaysAhead ? 'call' : 'later';
+      else if (available === 0) status = 'full';
+      else if (available <= Math.max(1, Math.floor(total / 4))) status = 'few';
+      else status = 'open';
+      days.push({ date, status, available: bookable ? available : 0 });
+    }
+    return { month, today, days, minDaysAhead: cfg.minDaysAhead, maxDaysAhead: cfg.maxDaysAhead };
+  }
+
+  /** Staff month view: every party plus closures. */
+  function adminMonth(month) {
+    if (!/^\d{4}-\d{2}$/.test(String(month))) throw new BookingError('Invalid month.');
+    const from = `${month}-01`, to = `${month}-31`;
+    const parties = list({ from, to }).filter((b) => ['pending', 'confirmed', 'paid'].includes(b.status))
+      .map((b) => ({ id: b.id, ref: b.ref, date: b.party_date, start: b.start_min, timeLabel: b.timeLabel, endLabel: b.endLabel, status: b.status, child: b.child_name, parent: b.parent_name, kids: b.kids, packageName: b.packageName, balanceCents: b.balanceCents, balanceOverdue: b.balanceOverdue }));
+    const blocks = db.prepare(`SELECT id, block_date AS date, start_min AS startMin, end_min AS endMin, reason FROM blocks WHERE block_date BETWEEN ? AND ? ORDER BY block_date, start_min`).all(from, to)
+      .map((b) => ({ ...b, allDay: b.startMin <= 0 && b.endMin >= 1440, label: b.startMin <= 0 && b.endMin >= 1440 ? 'All day' : `${scheduling.label12(b.startMin)} – ${scheduling.label12(b.endMin)}` }));
+    return { month, parties, blocks };
+  }
+
+  function addBlock({ date, start, end, reason }) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new BookingError('Choose a date.');
+    const startMin = start ? scheduling.toMinutes(start) : 0;
+    const endMin = end ? scheduling.toMinutes(end) : 1440;
+    if (!(endMin > startMin)) throw new BookingError('End time must be after start time.');
+    const info = db.prepare('INSERT INTO blocks (block_date, start_min, end_min, reason) VALUES (?, ?, ?, ?)').run(date, startMin, endMin, clean(reason));
+    // Warn staff about parties already booked in the closed time.
+    const clashes = list({ from: date, to: date }).filter((b) => ['pending', 'confirmed', 'paid'].includes(b.status)
+      && b.start_min < endMin && b.start_min + scheduling.partyMinutes(cfg) > startMin);
+    return { id: Number(info.lastInsertRowid), clashes: clashes.map((b) => `${b.timeLabel} ${b.child_name || b.parent_name} (${b.ref})`) };
+  }
+
+  function removeBlock(id) {
+    db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
   }
 
   function quoteFor(input) {
@@ -63,8 +129,8 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
     db.exec('BEGIN IMMEDIATE');
     try {
-      const slots = scheduling.slotsForDate(input.partyDate, takenStarts(input.partyDate), cfg);
-      if (!slots.open) throw new BookingError("We don't run parties on that day.");
+      const slots = scheduling.slotsForDate(input.partyDate, takenStarts(input.partyDate), cfg, blocksFor(input.partyDate));
+      if (!slots.open) throw new BookingError(slots.closedReason ? "Sorry — we're closed that day. Please pick another date." : "We don't run parties on that day.");
       const slot = slots.slots.find((s) => s.start === start);
       if (!slot) throw new BookingError('That start time is not offered.');
       if (!slot.available) throw new BookingError('Sorry — that time was just taken. Please pick another.');
@@ -222,7 +288,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   }
 
-  return { availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+  return { calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
 }
 
 function clean(v) {

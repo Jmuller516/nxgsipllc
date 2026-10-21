@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Party Calendar</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .cal-head h2 { margin: 0; font-size: 1.25rem; }
+    .navbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 1.2rem; cursor: pointer; }
+    .navbtn:disabled { opacity: .3; cursor: default; }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dow { text-align: center; font-size: .75rem; color: var(--muted); font-weight: 600; padding: 4px 0; }
+    .day { aspect-ratio: 1 / 1.05; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--ink); font: inherit; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; }
+    .day .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .day .s { font-size: .62rem; line-height: 1.1; text-align: center; }
+    .day.open, .day.few { cursor: pointer; background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+    .day.open .s { color: var(--ok); }
+    .day.few { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+    .day.few .s { color: var(--warn); }
+    .day.full { background: var(--bad-bg); }
+    .day.full .s { color: var(--bad); }
+    .day.closed .n, .day.past .n, .day.later .n { color: var(--muted); font-weight: 400; }
+    .day.call .s { color: var(--muted); }
+    .day.today { outline: 2px solid var(--line); }
+    .day[aria-pressed="true"] { outline: 3px solid var(--brand); outline-offset: 1px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--muted); margin: 14px 0 0; }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+    .live { font-size: .78rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
+    .times { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-top: 10px; }
+    .time { display: block; text-align: center; text-decoration: none; border: 1px solid var(--brand); color: var(--brand); border-radius: 10px; padding: 10px 6px; font-weight: 600; }
+    .time small { display: block; color: var(--muted); font-weight: 400; font-size: .75rem; }
+    .time:hover { background: var(--brand); color: var(--brand-ink); }
+    .time:hover small { color: var(--brand-ink); }
+    .time.taken { border-color: var(--line); color: var(--muted); text-decoration: line-through; pointer-events: none; }
+  </style>
+</head>
+<body>
+<main>
+  <img id="logo" class="page-logo hidden" alt="">
+  <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
+  <h1>Party availability</h1>
+  <p class="live" id="live">Live — updates automatically</p>
+
+  <div class="card">
+    <div class="cal-head">
+      <button class="navbtn" id="prev" aria-label="Previous month">‹</button>
+      <h2 id="monthLabel"></h2>
+      <button class="navbtn" id="next" aria-label="Next month">›</button>
+    </div>
+    <div class="grid" id="grid" role="grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>Open</span>
+      <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>Few times left</span>
+      <span><i style="background:var(--bad-bg)"></i>Booked</span>
+      <span><i style="background:transparent;border:1px solid var(--line)"></i>Closed</span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="dayCard">
+    <h2 style="margin-top:0" id="dayTitle"></h2>
+    <p class="muted" id="dayHint"></p>
+    <div class="times" id="times"></div>
+  </div>
+
+  <div class="card">
+    <p style="margin:0">Planning a corporate, adult, senior or team event? <a href="/book?tab=inquiry" id="inquiryLink">Send us a request</a> and we'll get back to you with options.</p>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const embedded = params.get('embed') ? '&embed=1' : '';
+let CFG, month, selected = null, refreshTimer;
+
+const STATUS = { open: 'Open', few: 'Few left', full: 'Booked', closed: '', past: '', later: '', call: 'Call us' };
+
+async function getJSON(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Could not load');
+  return d;
+}
+
+function ym(d) { return d.toLocaleDateString('en-CA').slice(0, 7); }
+function addMonths(m, n) { const [y, mo] = m.split('-').map(Number); return ym(new Date(y, mo - 1 + n, 1)); }
+
+async function init() {
+  CFG = await getJSON('/api/config');
+  $('bizName').textContent = CFG.business.name;
+  if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
+  if (embedded) { document.body.classList.add('embedded'); $('inquiryLink').href = '/book?embed=1&tab=inquiry'; }
+  month = params.get('month') || ym(new Date());
+  $('prev').onclick = () => { month = addMonths(month, -1); selected = null; load(); };
+  $('next').onclick = () => { month = addMonths(month, 1); selected = null; load(); };
+  await load();
+  // "Live": refresh every 30 seconds while the page is open, and right away when someone comes back to it.
+  refreshTimer = setInterval(() => load(true), 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(true); });
+}
+
+async function load(quiet) {
+  try {
+    const cal = await getJSON('/api/calendar?month=' + month);
+    render(cal);
+    if (selected) await showDay(selected, true);
+    $('live').textContent = 'Live — updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch (e) { if (!quiet) $('grid').innerHTML = `<p class="error" style="grid-column:1/-1">${e.message}</p>`; }
+}
+
+function render(cal) {
+  const [y, m] = cal.month.split('-').map(Number);
+  $('monthLabel').textContent = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  $('prev').disabled = cal.month <= ym(new Date());
+  const lastBookable = new Date(); lastBookable.setDate(lastBookable.getDate() + cal.maxDaysAhead);
+  $('next').disabled = cal.month >= ym(lastBookable);
+  const firstDow = new Date(y, m - 1, 1).getDay();
+  let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => `<div class="dow">${d}</div>`).join('');
+  html += '<div></div>'.repeat(firstDow);
+  for (const d of cal.days) {
+    const n = Number(d.date.slice(8));
+    const clickable = d.status === 'open' || d.status === 'few';
+    const label = d.status === 'open' || d.status === 'few' ? `${d.available} open` : STATUS[d.status];
+    html += `<button class="day ${d.status} ${d.date === cal.today ? 'today' : ''}" data-date="${d.date}" ${clickable ? '' : 'disabled'} aria-pressed="${d.date === selected}"
+      aria-label="${d.date}: ${label || 'not available'}"><span class="n">${n}</span><span class="s">${label}</span></button>`;
+  }
+  $('grid').innerHTML = html;
+  $('grid').querySelectorAll('.day:not([disabled])').forEach((b) => b.onclick = () => {
+    selected = b.dataset.date;
+    $('grid').querySelectorAll('.day').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    showDay(selected);
+  });
+}
+
+async function showDay(date, quiet) {
+  const card = $('dayCard');
+  const res = await getJSON('/api/availability?date=' + date).catch(() => null);
+  if (!res) return;
+  card.classList.remove('hidden');
+  $('dayTitle').textContent = new Date(date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const open = res.slots.filter((s) => s.available);
+  $('dayHint').textContent = open.length ? 'Tap a start time to book. Every party is 2 hours.' : 'This day just filled up — please choose another.';
+  $('times').innerHTML = res.slots.map((s) => s.available
+    ? `<a class="time" href="/book?date=${date}&time=${s.time}${embedded}">${s.label}<small>to ${s.endLabel}</small></a>`
+    : `<span class="time taken">${s.label}<small>taken</small></span>`).join('');
+  if (!quiet) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+if (window.parent !== window) {
+  const post = () => window.parent.postMessage({ type: 'nxgs:height', height: document.documentElement.scrollHeight }, '*');
+  new ResizeObserver(post).observe(document.body);
+}
+
+init().catch((e) => document.querySelector('main').insertAdjacentHTML('beforeend', `<p class="error">${e.message}</p>`));
+</script>
+</body>
+</html>

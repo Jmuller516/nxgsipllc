@@ -4,7 +4,9 @@
  *   <div id="nxgs-booking"></div>
  *   <script src="https://book.nxgs.net/static/embed.js" async></script>
  *
- * Optional: data-tab="inquiry" on the div opens the group & corporate form first.
+ * Optional on the div:
+ *   data-page="calendar"  shows the live availability calendar instead of the booking form
+ *   data-tab="inquiry"    opens the group & corporate form first
  * The frame grows and shrinks to fit the booking form, so there is no inner scrollbar.
  */
 (function () {
@@ -16,7 +18,8 @@
     host.dataset.mounted = '1';
     var frame = document.createElement('iframe');
     var tab = host.getAttribute('data-tab');
-    frame.src = origin + '/book?embed=1' + (tab ? '&tab=' + encodeURIComponent(tab) : '');
+    var page = host.getAttribute('data-page') === 'calendar' ? '/calendar' : '/book';
+    frame.src = origin + page + '?embed=1' + (tab ? '&tab=' + encodeURIComponent(tab) : '');
     frame.title = 'Book a party';
     frame.loading = 'lazy';
     frame.style.cssText = 'width:100%;border:0;display:block;min-height:900px;transition:height .15s';

@@ -12,6 +12,7 @@
   <img id="logo" class="page-logo hidden" alt="">
   <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
   <h1>Book your event</h1>
+  <p class="muted"><a href="/calendar" id="calLink">See the availability calendar →</a></p>
   <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
   <p id="cancelBanner" class="banner hidden">Payment was cancelled. Your time is held briefly; you can try again below.</p>
 
@@ -116,8 +117,9 @@ async function init() {
   $('bizName').textContent = CFG.business.name;
   const params = new URLSearchParams(location.search);
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
-  if (params.get('embed')) document.body.classList.add('embedded');
+  if (params.get('embed')) { document.body.classList.add('embedded'); $('calLink').href = '/calendar?embed=1'; }
   if (params.get('tab') === 'inquiry') setTimeout(() => document.querySelector('[data-tab=inquiry]').click());
+  const wantTime = params.get('time');
   if (!CFG.stripe) $('demoBanner').classList.remove('hidden');
   if (new URLSearchParams(location.search).get('cancelled')) $('cancelBanner').classList.remove('hidden');
 
@@ -168,6 +170,14 @@ async function init() {
   $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
+  // Coming from the calendar: fill in the date and time they picked.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '')) {
+    $('date').value = params.get('date');
+    await loadSlots();
+    updateLeadTimes();
+    const slot = wantTime && $('slots').querySelector(`.slot[data-time="${wantTime}"]:not([disabled])`);
+    if (slot) slot.click();
+  }
   $('inquiryForm').addEventListener('submit', submitInquiry);
   scheduleQuote();
 }
@@ -181,7 +191,7 @@ async function loadSlots() {
     const res = await api('/api/availability?date=' + date);
     if (!res.open) { $('slotsMsg').textContent = "We don't run parties that day — please pick another date."; return; }
     if (!res.slots.some((s) => s.available)) { $('slotsMsg').textContent = 'That day is fully booked. Please try another date.'; }
-    $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="' + s.reason + '"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
+    $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="Taken"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
     $('slots').querySelectorAll('.slot').forEach((b) => b.onclick = () => {
       $('slots').querySelectorAll('.slot').forEach((x) => x.setAttribute('aria-pressed', x === b));
       selectedTime = b.dataset.time; scheduleQuote();

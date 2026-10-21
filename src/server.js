@@ -62,6 +62,9 @@ function createApp(db, opts = {}) {
 
   route('POST', '/api/quote', ({ body }) => svc.quoteFor(body));
 
+  // Live availability calendar (public: open/full only, never who booked).
+  route('GET', '/api/calendar', ({ query }) => svc.calendarMonth(String(query.month || '')));
+
   route('POST', '/api/bookings', async ({ body, baseUrl }) => {
     const b = svc.create(body);
     const url = await startCheckout(b, b.deposit_cents, b.quote.payInFull ? 'full' : 'deposit', baseUrl);
@@ -114,6 +117,12 @@ function createApp(db, opts = {}) {
     return { customerPage: customerUrl(b, baseUrl) };
   }, { admin: true });
   route('GET', '/api/admin/leads', () => svc.listLeads(), { admin: true });
+
+  // Staff calendar & closures
+  route('GET', '/api/admin/calendar', ({ query }) => svc.adminMonth(String(query.month || '')), { admin: true });
+  route('POST', '/api/admin/blocks', ({ body }) => svc.addBlock(body), { admin: true });
+  route('DELETE', '/api/admin/blocks/:id', ({ params }) => { svc.removeBlock(Number(params.id)); return { ok: true }; }, { admin: true });
+  route('GET', '/api/admin/calendar-feed', ({ baseUrl }) => ({ url: `${baseUrl}/feeds/${feedToken()}/parties.ics` }), { admin: true });
 
   // Pricing (edited from the admin page)
   route('GET', '/api/admin/pricing', () => priceSettings.view(), { admin: true });
@@ -242,6 +251,13 @@ function createApp(db, opts = {}) {
 
       // Pages
       if (req.method === 'GET' && (pathname === '/' || pathname === '/book')) return sendFile(res, 'book.html', { embeddable: true });
+      if (req.method === 'GET' && pathname === '/calendar') return sendFile(res, 'calendar.html', { embeddable: true });
+      const feed = /^\/feeds\/([^/]+)\/parties\.ics$/.exec(pathname);
+      if (req.method === 'GET' && feed) {
+        if (!process.env.ADMIN_PASSWORD || !safeEqual(feed[1], feedToken())) return send(res, { error: 'Not found' }, 404);
+        res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(icsFeed());
+      }
       if (req.method === 'GET' && pathname === '/admin') {
         if (!adminOk(req)) return askForLogin(res);
         return sendFile(res, 'admin.html');
@@ -303,7 +319,47 @@ function createApp(db, opts = {}) {
     return safeEqual(pass || '', pw);
   }
 
-  return { handle, svc, notifier, qbo, background };
+  // Private calendar feed for Google Calendar / iPhone. The secret link changes if ADMIN_PASSWORD changes.
+  function feedToken() {
+    return crypto.createHmac('sha256', String(process.env.ADMIN_PASSWORD || '')).update('nxgs-ics-feed').digest('hex').slice(0, 32);
+  }
+
+  function icsFeed() {
+    const now = (opts.clock || (() => new Date()))();
+    const from = new Date(now.getTime() - 60 * 86400000).toISOString().slice(0, 10);
+    const to = new Date(now.getTime() + 400 * 86400000).toISOString().slice(0, 10);
+    const tz = config.business.timezone;
+    const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    const local = (date, min) => `${date.replace(/-/g, '')}T${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}00`;
+    const text = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NXGS//Party App//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      `X-WR-CALNAME:${text(config.business.shortName + ' Parties')}`, `X-WR-TIMEZONE:${tz}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT15M', 'X-PUBLISHED-TTL:PT15M'];
+    for (const b of svc.list({ from, to }).filter((x) => ['confirmed', 'paid', 'pending'].includes(x.status))) {
+      const end = b.start_min + require('./scheduling').partyMinutes(config);
+      const title = `${b.status === 'pending' ? '[HOLD] ' : ''}${b.child_name ? `${b.child_name}'s party` : `${b.parent_name} party`} · ${b.kids} kids`;
+      const desc = [`${b.packageName} · Booking ${b.ref}`, `Parent: ${b.parent_name} · ${b.phone} · ${b.email}`,
+        b.schedule.map((s) => `${s.from} ${s.label}`).join('\n'),
+        b.balanceCents > 0 ? `Balance owed: ${money(b.balanceCents)}${b.balanceOverdue ? ' (OVERDUE)' : ''}` : 'Paid in full',
+        b.quote.lines.filter((l) => l.kind === 'addon').map((l) => `+ ${l.name} × ${l.qty}`).join('\n'),
+        b.notes ? `Notes: ${b.notes}` : ''].filter(Boolean).join('\n');
+      lines.push('BEGIN:VEVENT', `UID:${b.ref}@nxgs-party-app`, `DTSTAMP:${stamp}`,
+        `DTSTART;TZID=${tz}:${local(b.party_date, b.start_min)}`, `DTEND;TZID=${tz}:${local(b.party_date, end)}`,
+        `SUMMARY:${text(title)}`, `DESCRIPTION:${text(desc)}`, `STATUS:${b.status === 'pending' ? 'TENTATIVE' : 'CONFIRMED'}`, 'END:VEVENT');
+    }
+    for (const k of db.prepare('SELECT * FROM blocks WHERE block_date BETWEEN ? AND ?').all(from, to)) {
+      const allDay = k.start_min <= 0 && k.end_min >= 1440;
+      const next = new Date(`${k.block_date}T12:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
+      lines.push('BEGIN:VEVENT', `UID:block-${k.id}@nxgs-party-app`, `DTSTAMP:${stamp}`,
+        allDay ? `DTSTART;VALUE=DATE:${k.block_date.replace(/-/g, '')}` : `DTSTART;TZID=${tz}:${local(k.block_date, k.start_min)}`,
+        allDay ? `DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, '')}` : `DTEND;TZID=${tz}:${local(k.block_date, Math.min(k.end_min, 1439))}`,
+        `SUMMARY:${text(`Closed for parties${k.reason ? ': ' + k.reason : ''}`)}`, 'TRANSP:TRANSPARENT', 'END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    // Lines over 75 octets must be folded (RFC 5545).
+    return lines.map((l) => { let out = ''; let rest = l; while (Buffer.byteLength(rest) > 74) { let cut = 74; while (Buffer.byteLength(rest.slice(0, cut)) > 74) cut--; out += rest.slice(0, cut) + '\r\n '; rest = rest.slice(cut); } return out + rest; }).join('\r\n') + '\r\n';
+  }
+
+  return { handle, svc, notifier, qbo, background, icsFeed, feedToken };
 }
 
 // Brand colors & fonts from config.brand, loaded after style.css.

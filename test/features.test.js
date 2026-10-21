@@ -224,3 +224,82 @@ test('QuickBooks: payments wait safely until connected', async () => {
   assert.equal((await qbo.syncPending()).skipped, true);
   assert.equal(qbo.status().pending, 1);
 });
+
+// ---------- calendar ----------
+test('public calendar shows open / few / full / closed days without revealing who booked', () => {
+  const { svc } = setup('2026-11-01T14:00:00Z');
+  const cal = svc.calendarMonth('2026-11');
+  const day = (d) => cal.days.find((x) => x.date === d);
+  assert.equal(day('2026-11-02').status, 'closed');      // Monday
+  assert.equal(day('2026-11-01').status, 'call');        // today: inside the 2-day minimum
+  assert.equal(day('2026-11-14').status, 'open');        // Saturday
+  const totalSat = day('2026-11-14').available;
+
+  // Fill Saturday the 21st completely
+  let booked = 0;
+  for (const t of svc.availability('2026-11-21').slots.map((s) => s.time)) {
+    try { svc.create({ ...guest, partyDate: '2026-11-21', time: t }); booked++; } catch {}
+  }
+  assert.ok(booked >= 4);
+  assert.equal(svc.calendarMonth('2026-11').days.find((x) => x.date === '2026-11-21').status, 'full');
+
+  // Public availability carries no reasons/names
+  const slots = svc.availability('2026-11-21').slots;
+  assert.ok(slots.every((s) => !('reason' in s)));
+  assert.ok(totalSat > 4);
+});
+
+test('staff closures block booking and show on calendars', () => {
+  const { svc } = setup('2026-11-01T14:00:00Z');
+  svc.create({ ...guest, partyDate: '2026-11-14', time: '12:00' });
+  const r = svc.addBlock({ date: '2026-11-14', start: '13:00', end: '16:00', reason: 'Tournament' });
+  assert.equal(r.clashes.length, 1); // the 12:00 party overlaps — staff are warned
+  const slots = svc.availability('2026-11-14').slots;
+  assert.equal(slots.find((s) => s.time === '14:00').available, false);
+  assert.equal(slots.find((s) => s.time === '16:00').available, true);
+  assert.throws(() => svc.create({ ...guest, partyDate: '2026-11-14', time: '14:30' }), /just taken/);
+
+  const allDay = svc.addBlock({ date: '2026-11-15', reason: 'Closed for holiday' });
+  assert.equal(svc.calendarMonth('2026-11').days.find((x) => x.date === '2026-11-15').status, 'closed');
+  assert.throws(() => svc.create({ ...guest, partyDate: '2026-11-15', time: '12:00' }), /closed that day/);
+  svc.removeBlock(allDay.id);
+  assert.equal(svc.calendarMonth('2026-11').days.find((x) => x.date === '2026-11-15').status, 'open');
+
+  const m = svc.adminMonth('2026-11');
+  assert.equal(m.parties.length, 1);
+  assert.equal(m.blocks[0].label, '1:00 PM – 4:00 PM');
+});
+
+test('HTTP: calendar page, calendar API and private Google Calendar feed', async () => {
+  const http = require('node:http');
+  const { createApp } = require('../src/server');
+  delete process.env.STRIPE_SECRET_KEY;
+  process.env.ADMIN_PASSWORD = 'secret';
+  const db = open(':memory:');
+  const app = createApp(db, { clock: () => new Date('2026-11-01T14:00:00Z'), background: false });
+  const server = http.createServer(app.handle).listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await fetch(`${base}/calendar`)).status, 200);
+    const cal = await (await fetch(`${base}/api/calendar?month=2026-11`)).json();
+    assert.equal(cal.days.length, 30);
+
+    const b = app.svc.create({ ...guest, childName: 'Sam, Jr.' });
+    app.svc.recordPayment(b.id, { kind: 'deposit', method: 'cash', amountCents: b.deposit_cents });
+    app.svc.addBlock({ date: '2026-11-29', reason: 'Thanksgiving weekend' });
+
+    assert.equal((await fetch(`${base}/feeds/wrongtoken/parties.ics`)).status, 404);
+    const ics = await (await fetch(`${base}/feeds/${app.feedToken()}/parties.ics`)).text();
+    assert.match(ics, /BEGIN:VCALENDAR/);
+    assert.match(ics, /DTSTART;TZID=America\/New_York:20261128T120000/);
+    assert.match(ics, /SUMMARY:Sam\\, Jr\.'s party · 15 kids/);
+    assert.match(ics, /DTSTART;VALUE=DATE:20261129/);
+    assert.ok(ics.split('\r\n').every((l) => Buffer.byteLength(l) <= 75));
+
+    const auth = { Authorization: 'Basic ' + Buffer.from('admin:secret').toString('base64') };
+    const del = await fetch(`${base}/api/admin/blocks/1`, { method: 'DELETE', headers: auth });
+    assert.equal(del.status, 200);
+  } finally {
+    server.close();
+  }
+});

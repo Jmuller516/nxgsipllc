@@ -74,18 +74,22 @@ function conflictReason(start, existingStarts, cfg = config) {
  * @param {string} dateYmd 'YYYY-MM-DD'
  * @param {number[]} existingStarts
  */
-function slotsForDate(dateYmd, existingStarts, cfg = config) {
+function slotsForDate(dateYmd, existingStarts, cfg = config, blocks = []) {
   const [y, m, d] = dateYmd.split('-').map(Number);
   const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const hours = cfg.partyHours[weekday];
   if (!hours) return { open: false, slots: [] };
+  // Staff closed the whole day (holiday, tournament, private event).
+  const allDay = blocks.find((b) => b.startMin <= 0 && b.endMin >= 24 * 60);
+  if (allDay) return { open: false, closedReason: allDay.reason || 'Closed', slots: [] };
 
   const open = toMinutes(hours.open);
   const close = toMinutes(hours.close);
   const length = partyMinutes(cfg);
   const slots = [];
   for (let s = open; s + length <= close; s += cfg.party.slotIntervalMinutes) {
-    const reason = conflictReason(s, existingStarts, cfg);
+    const blocked = blocks.some((b) => overlaps(s, s + length, b.startMin, b.endMin));
+    const reason = blocked ? 'Not available' : conflictReason(s, existingStarts, cfg);
     slots.push({ start: s, time: toHHMM(s), label: label12(s), endLabel: label12(s + length), available: !reason, reason });
   }
   return { open: true, slots };

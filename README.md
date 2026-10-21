@@ -4,7 +4,10 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 
 ## What it does
 
-**For customers** (`/book`, which can be embedded on nxgs.net)
+**For customers**
+- **Live availability calendar** (`/calendar`): a month view showing which days are Open, Few left, Booked or Closed. It updates automatically every 30 seconds. Customers tap a day to see open start times, and tapping a time opens the booking form with the date and time filled in. They never see who booked.
+
+**Booking form** (`/book`)
 - Pick a kids party package and number of kids (15 included, $25 each extra, max 20)
 - See only the start times that are actually open. The scheduler enforces:
   - two parties at once, at most
@@ -17,6 +20,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - Automatic emails: booking confirmation, payment receipts, balance reminder (3 days before it's due), past-due notice, and "see you tomorrow"
 
 **For staff** (`/admin`, password protected)
+- **Calendar**: a month view of every party, with names, holds in yellow, and a red edge when a balance is overdue. Tap a day to see its parties or **close the day or a time block** for holidays, tournaments or rentals. Customers can't book closed times, and you're warned if a party is already booked in that window.
+- **Google Calendar / iPhone feed** (Settings tab): subscribe once, and every party and closure shows in your own calendar, updating automatically.
 - Dashboard: upcoming parties, booked value, balances owed, overdue balances, money collected, new leads
 - Party list with full detail: schedule, receipt, payments
 - Record desk payments (card, cash, check) and cancel parties
@@ -41,7 +46,7 @@ You need **Node.js 22.13 or newer**. There are no other dependencies, so you don
 
 ```bash
 npm run demo     # admin password "demo", payments simulated
-npm test         # 19 automated tests
+npm test         # 22 automated tests
 ```
 
 Then open http://localhost:3000/book and http://localhost:3000/admin.
@@ -95,7 +100,9 @@ Host the app on any Node host (Render, Railway, a small VPS) and point a subdoma
 <script src="https://book.nxgs.net/static/embed.js" async></script>
 ```
 
-The booking form resizes itself to fit the page, with no inner scrollbar. Add `data-tab="inquiry"` to the div to open on the group & corporate form, for example on a "Corporate Events" page. This works the same on Base44 now and WordPress later. You can also link a "Book a Party" button straight to `https://book.nxgs.net/book`.
+The booking form resizes itself to fit the page, with no inner scrollbar. Options on the div:
+- `data-page="calendar"` shows the live availability calendar, for example on a "Party Calendar" page
+- `data-tab="inquiry"` opens on the group & corporate form, for example on a "Corporate Events" page This works the same on Base44 now and WordPress later. You can also link a "Book a Party" button straight to `https://book.nxgs.net/book`.
 
 **Match the new site's look** by setting `brand` in `src/config.js`: main color, accent color, font (any Google Font), logo and corner roundness. Emails use the same logo and color.
 
