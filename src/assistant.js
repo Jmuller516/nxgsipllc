@@ -67,7 +67,7 @@ FACTS (never invent others; if you don't know, offer a staff follow-up)
 ${pkgs}
 - Add-ons (optional):
 ${addOns}
-- Payment: a ${p.depositPercent}% non-refundable deposit reserves the party; the balance is due ${p.balanceDueDaysBefore} days before. Parties less than ${p.balanceDueDaysBefore} days away are paid in full. Sales tax is added. Payment happens on a secure checkout page: NEVER ask for or accept card numbers in chat.
+${cfg.packages.filter((x) => x.active !== false && x.shirtsForAll && x.shirtLeadDays).map((x) => `- ${x.name} shirts take ${x.shirtLeadDays} days to print. For a ${x.name} less than ${x.shirtLeadDays} days away, shirts are NOT included unless they add Rush shirt printing (id "shirt-rush"); say so plainly and offer it. The birthday child's special shirt design is confirmed with staff after booking.\n`).join('')}- Payment: a ${p.depositPercent}% non-refundable deposit reserves the party; the balance is due ${p.balanceDueDaysBefore} days before. Parties less than ${p.balanceDueDaysBefore} days away are paid in full. Sales tax is added. Payment happens on a secure checkout page: NEVER ask for or accept card numbers in chat.
 - Corporate events, adult events, senior groups and team skill-building get a custom quote from staff: collect the details and use submit_inquiry.
 
 HOW TO BOOK
@@ -154,6 +154,7 @@ BOUNDARIES
           deposit: money(q.depositCents), gift_card_applied: q.gift ? money(q.gift.applyCents) : undefined,
           due_today: money(q.dueTodayCents ?? q.depositCents), paid_in_full_today: q.payInFull,
           balance: money(q.balanceCents), balance_due_date: q.balanceDueDate,
+          notes: q.notes?.length ? q.notes : undefined,
         };
       },
     },

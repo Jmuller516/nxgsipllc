@@ -276,7 +276,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     const qty = (id) => (b.quote.lines.find((l) => l.id === id)?.qty || 0);
     const needs = { theme: true, childName: true, childAge: true, allergies: true };
     // Packages like MVP include a printed shirt for every child; extra shirts can still be added on.
-    const included = cfg.packages.find((p) => p.id === b.package_id)?.shirtsForAll ? Number(b.kids) || 0 : 0;
+    const included = cfg.packages.find((p) => p.id === b.package_id)?.shirtsForAll && b.quote.shirtsIncluded !== false ? Number(b.kids) || 0 : 0;
     if (included + qty('shirts')) needs.shirtSizes = included + qty('shirts');
     if (cfg.details.needsPhoto.some((id) => qty(id))) needs.photo = true;
     if (cfg.details.needsJerseyNumber.some((id) => qty(id))) needs.jerseyNumber = true;

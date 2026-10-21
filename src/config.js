@@ -115,11 +115,11 @@ module.exports = {
       phases: [
         { key: 'play', label: 'Field play (2 sports)', minutes: 60 },
         { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
-        { key: 'food', label: 'Food & cake', minutes: 30 },
+        { key: 'food', label: 'Food, cake & presents', minutes: 30 },
       ],
-      includes: "2 hours: 60 minutes of field play (2 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
+      includes: "2 hours: 60 minutes of field play (2 sports)\n30 minutes in the video game room\n30 minutes in the party room for food, cake and presents\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: '2 hours: 60 min field play (2 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks and a dedicated party host.',
+      description: '2 hours: 60 min field play (2 sports), 30 min video game room, 30 min food, cake & presents, plus pizza, drinks and a dedicated party host.',
     },
     {
       id: 'mvp',
@@ -130,12 +130,13 @@ module.exports = {
       phases: [
         { key: 'play', label: 'Field play (3 sports)', minutes: 60 },
         { key: 'gameRoom', label: 'Video game room', minutes: 30, exclusive: true },
-        { key: 'food', label: 'Food & cake', minutes: 30 },
+        { key: 'food', label: 'Food, cake & presents', minutes: 30 },
       ],
-      includes: "2 hours: 60 minutes of field play (3 sports)\n30 minutes in the video game room\n30 minutes in the party room for food and cake\nPizza from Calabria Pizza and drinks for the kids\nA dedicated NXGS party host\nPrinted party shirt for every child (one-color print by Lifestyles Sports; sizes collected after booking)\nGoodie bag for every child (contents to be confirmed)\nTables, chairs, setup and cleanup",
+      includes: "2 hours: 60 minutes of field play (3 sports)\n30 minutes in the video game room\n30 minutes in the party room for food, cake and presents\nPizza from Calabria Pizza and drinks for the kids\nA dedicated NXGS party host\nPrinted party shirt for every child (one-color print by Lifestyles Sports; sizes collected after booking)\nSpecial shirt for the birthday child (multi-color, or an extra design on the back)\nShirts need 2 weeks to print: parties booked less than 2 weeks out need Rush shirt printing\nGoodie bag for every child (contents to be confirmed)\nTables, chairs, setup and cleanup",
       taxable: true,
-      description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food & cake, plus pizza, drinks, a party host, a one-color printed shirt for every child and goodie bags.',
+      description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food, cake & presents, plus pizza, drinks, a party host, a one-color printed shirt for every child (special one for the birthday child) and goodie bags.',
       shirtsForAll: true, // one printed shirt per child; sizes go on the party details form
+      shirtLeadDays: 14, // inside this, shirts are only included with the shirt-rush add-on
     },
   ],
 
@@ -178,7 +179,9 @@ module.exports = {
     { id: 'medal', category: 'favors', name: 'MVP medal', detail: 'Metal medal, ribbon and name label', unit: 'each', priceCents: 1000, costCents: 400, minQty: 12, leadDays: 14, vendor: 'NXGS favors & decor', taxable: true, includes: "Metal medal on a ribbon\nName label" },
     { id: 'bag-tag', category: 'favors', name: 'Jersey bag tag', detail: 'Acrylic tag with clip', unit: 'each', priceCents: 1000, costCents: 400, minQty: 12, leadDays: 14, vendor: 'NXGS favors & decor', taxable: true, includes: "Acrylic bag tag with clip\nPersonalized with a name and number" },
     { id: 'wristbands', category: 'favors', name: 'Wristband set', detail: 'Three sports bands in a sleeve', unit: 'set', priceCents: 900, costCents: 400, minQty: 12, leadDays: 28, vendor: 'NXGS favors & decor', taxable: true, includes: "Set of three sports wristbands\nPackaged in a sleeve" },
-    { id: 'shirts', category: 'favors', name: 'Custom party shirt', detail: 'Printed by Lifestyles Sports', unit: 'each', priceCents: 1800, costCents: 900, minQty: 1, leadDays: 14, vendor: 'Lifestyles Sports (Wantagh)', taxable: true, includes: "Custom printed party t-shirt\nPrinted by Lifestyles Sports in Wantagh\nSizes collected after booking" },
+    { id: 'shirts', category: 'favors', name: 'Custom party shirt', detail: 'Printed by Lifestyles Sports', unit: 'each', priceCents: 1800, costCents: 900, minQty: 1, leadDays: 14, rushable: true, vendor: 'Lifestyles Sports (Wantagh)', taxable: true, includes: "Custom printed party t-shirt\nPrinted by Lifestyles Sports in Wantagh\nSizes collected after booking" },
+    { id: 'shirt-rush', category: 'favors', name: 'Rush shirt printing', detail: 'For parties less than 2 weeks away', unit: 'party', priceCents: 7500, minQty: 1, maxQty: 1, onlyWithinDays: 14, vendor: 'Lifestyles Sports (Wantagh)', taxable: true,
+      includes: "Rush printing so shirts are ready for the party\nNeeded for MVP Party shirts or custom party shirts when the party is less than 2 weeks away\nWe confirm the rush with our printer after you book" },
 
     // Decorations & party extras (items 11–20)
     { id: 'balloon-tower', category: 'decor', name: 'Balloon tower', detail: 'Approx. 5–6 ft, sports topper', unit: 'each', priceCents: 11000, costCents: 4250, minQty: 1, leadDays: 14, vendor: 'NXGS favors & decor', taxable: true, includes: "Balloon column about 5\u20136 feet tall\nSports ball topper\nSet up at NXGS before the party" },

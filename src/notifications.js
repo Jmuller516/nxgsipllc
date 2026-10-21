@@ -145,7 +145,7 @@ function createNotifier(db, svc, opts = {}) {
           ${b.balanceCents > 0 ? `<p>The remaining <b>${money(b.balanceCents)}</b> is due by <b>${esc(fmtDate(b.balance_due_date))}</b>. You can pay it anytime from your booking page.</p>` : ''}
           <p><b>Next steps</b> (all on your booking page):</p>
           <ol style="padding-left:20px;margin:0 0 12px">
-            <li>Fill in your party details (theme, name spelling, allergies${b.quote.lines.some((l) => l.id === 'shirts') || cfg.packages.find((p) => p.id === b.package_id)?.shirtsForAll ? ', shirt sizes' : ''}).</li>
+            <li>Fill in your party details (theme, name spelling, allergies${b.quote.lines.some((l) => l.id === 'shirts') || (cfg.packages.find((p) => p.id === b.package_id)?.shirtsForAll && b.quote.shirtsIncluded !== false) ? ', shirt sizes' : ''}).</li>
             <li>Send your invitation link to guests: <a href="${esc(inviteLink(b))}">${esc(inviteLink(b))}</a>. Guests RSVP and sign the waiver online.</li>
           </ol>
           ${b.referral_code ? `<p style="background:#f4f6f9;padding:10px 12px;border-radius:8px">Know another family planning a party? Share your code <b>${esc(b.referral_code)}</b>: they get ${money(cfg.referral.friendDiscountCents)} off and you get ${money(cfg.referral.referrerCreditCents)} in party credit.</p>` : ''}

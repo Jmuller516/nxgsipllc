@@ -190,3 +190,4 @@ body.embedded .hero { display: none; }
 .sponsor img { height: 30px; max-width: 140px; object-fit: contain; display: block; }
 .sponsor small { color: var(--muted); font-size: .72rem; }
 .sponsor-strip.foot { margin: 16px 0 0; }
+.receipt .note-row { background: #fff6e5; color: #7a4b00; font-size: .9em; padding: 8px 10px; border-radius: 6px; }

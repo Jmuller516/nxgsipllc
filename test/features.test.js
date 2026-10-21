@@ -36,7 +36,7 @@ test('add-on minimums and lead times are enforced', () => {
   assert.throws(() => pricing.quote({ ...base, partyDate: '2026-11-20', addOns: { backdrop: 1 } }), /needs 28 days/);
   assert.equal(pricing.quote({ ...base, partyDate: '2026-12-05', addOns: { backdrop: 1 } }).lines.at(-1).totalCents, 29900);
   // all 20 items from the guide are present
-  assert.equal(config.addOns.filter((a) => ['favors', 'decor'].includes(a.category) && a.id !== 'shirts').length, 20);
+  assert.equal(config.addOns.filter((a) => ['favors', 'decor'].includes(a.category) && !['shirts', 'shirt-rush'].includes(a.id)).length, 20);
 });
 
 // ---------- admin price editing ----------
@@ -362,6 +362,19 @@ test('Rookie Party is 90 minutes; its game room slot and end time follow its own
   assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).phases[0].label, 'Field play (2 sports)');
   assert.equal(pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).phases[0].label, 'Field play (3 sports)');
   assert.equal(config.packages.find((p) => p.id === 'mvp').shirtsForAll, true);
+  assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).phases[2].label, 'Food, cake & presents');
+  // MVP shirts take 2 weeks to print: inside that, they come only with rush printing.
+  const late = pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-08', today: '2026-11-01' });
+  assert.equal(late.shirtsIncluded, false);
+  assert.match(late.notes[0], /Rush shirt printing/);
+  const rushed = pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-08', today: '2026-11-01', addOns: { 'shirt-rush': 1 } });
+  assert.equal(rushed.shirtsIncluded, true);
+  assert.equal(rushed.notes.length, 0);
+  assert.equal(pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-28', today: '2026-11-01' }).shirtsIncluded, true);
+  assert.throws(() => pricing.quote({ packageId: 'mvp', kids: 15, partyDate: '2026-11-28', today: '2026-11-01', addOns: { 'shirt-rush': 1 } }), /only needed/);
+  assert.throws(() => pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-08', today: '2026-11-01', addOns: { 'shirt-rush': 1 } }), /only for parties with shirts/);
+  assert.throws(() => pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-08', today: '2026-11-01', addOns: { shirts: 5 } }), /14 days/);
+  assert.equal(pricing.quote({ packageId: 'allstar', kids: 15, partyDate: '2026-11-08', today: '2026-11-01', addOns: { shirts: 5, 'shirt-rush': 1 } }).lines.length, 3);
 
   const { svc } = setup('2026-11-01T14:00:00Z');
   const b = svc.create({ ...guest, packageId: 'rookie', partyDate: '2026-11-28', time: '12:00' });

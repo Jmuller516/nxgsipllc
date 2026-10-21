@@ -227,7 +227,7 @@ async function init() {
     $('inquiryDone').classList.add('hidden');
   });
 
-  $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } scheduleQuote(); });
+  $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } if (e.target.dataset?.addon === 'shirt-rush') updateLeadTimes(); scheduleQuote(); });
   $('packages').addEventListener('change', () => { showSchedule(); shirtRow(); if ($('date').value) loadSlots(); });
   shirtRow();
   $('partyForm').addEventListener('change', scheduleQuote);
@@ -314,7 +314,10 @@ function updateLeadTimes() {
   CFG.addOns.forEach((a) => {
     const row = document.querySelector(`[data-row="${a.id}"]`);
     const inp = row.querySelector('input');
-    const tooSoon = a.leadDays && days < a.leadDays;
+    const notNeeded = a.onlyWithinDays && days >= a.onlyWithinDays;
+    const rush = Number(document.querySelector('[data-addon="shirt-rush"]')?.value) > 0;
+    const tooSoon = (a.leadDays && days < a.leadDays && !(a.rushable && rush)) || notNeeded;
+    row.querySelector('.lead-warn').textContent = notNeeded ? `Only for parties less than ${a.onlyWithinDays} days away` : a.rushable ? 'Needs Rush shirt printing for this date' : 'Not enough time before this date';
     inp.disabled = !!tooSoon;
     if (tooSoon) inp.value = 0;
     row.classList.toggle('unavailable', !!tooSoon);
@@ -343,7 +346,7 @@ async function updateQuote() {
     const q = await api('/api/quote', f);
     const rows = q.lines.map((l) => `<tr${l.kind === 'discount' ? ' class="yes"' : ''}><td>${l.name}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('');
     const due = q.dueTodayCents ?? q.depositCents;
-    $('summary').innerHTML = rows +
+    $('summary').innerHTML = (q.notes || []).map((n) => `<tr><td colspan="2" class="note-row">${escH(n)}</td></tr>`).join('') + rows +
       `<tr class="sub"><td>Subtotal</td><td class="num">${money(q.subtotalCents)}</td></tr>` +
       `<tr class="sub"><td>${CFG.tax.label}</td><td class="num">${money(q.taxCents)}</td></tr>` +
       `<tr class="total"><td>Total</td><td class="num">${money(q.totalCents)}</td></tr>` +
