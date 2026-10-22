@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Party</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+<main>
+  <div class="topline"><span id="langBox"></span></div>
+  <p class="eyebrow" id="biz">Next Generation Sports Complex</p>
+  <h1 id="h"></h1>
+  <p class="muted" id="intro"></p>
+  <form id="f" class="card" novalidate>
+    <label for="email" id="lEmail"></label><input id="email" type="email" autocomplete="email" inputmode="email" required>
+    <label for="code" id="lCode"></label><input id="code" autocomplete="off" autocapitalize="characters" maxlength="9" placeholder="K7M2-9QXP" style="max-width:220px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">
+    <div id="msg" class="hidden" role="alert"></div>
+    <div class="actions"><button class="btn" type="submit" id="go"></button></div>
+  </form>
+  <div class="card">
+    <h2 style="margin-top:0" id="lostH"></h2>
+    <p class="muted" id="lostP"></p>
+    <div class="actions"><button class="btn ghost" type="button" id="resend"></button></div>
+    <p id="resendMsg" class="muted"></p>
+  </div>
+</main>
+<script src="/static/i18n.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const LANG = NXI18N.lang;
+const S = {
+  en: { title: 'Open your party page', intro: 'Enter the email you booked with and the code from your confirmation email. Your page shows everything you’re getting and what’s left to do.',
+    email: 'Email you booked with', code: 'Party page code', go: 'Open my party page', opening: 'Opening…',
+    lostH: 'Can’t find your code?', lostP: 'We’ll email it again to the address you booked with.', resend: 'Email me my code', needEmail: 'Enter your email above first.',
+    sent: 'If that email has a party booked, your code is on its way. Check your inbox (and spam folder).' },
+  es: { title: 'Abra la página de su fiesta', intro: 'Ingrese el correo con el que reservó y el código de su correo de confirmación. Su página muestra todo lo que incluye su fiesta y lo que falta por hacer.',
+    email: 'Correo con el que reservó', code: 'Código de la página de la fiesta', go: 'Abrir la página de mi fiesta', opening: 'Abriendo…',
+    lostH: '¿No encuentra su código?', lostP: 'Se lo enviaremos otra vez al correo con el que reservó.', resend: 'Enviarme mi código', needEmail: 'Primero escriba su correo arriba.',
+    sent: 'Si ese correo tiene una fiesta reservada, su código va en camino. Revise su bandeja de entrada (y el correo no deseado).' },
+}[LANG === 'es' ? 'es' : 'en'];
+NXI18N.toggle($('langBox'), () => {});
+$('h').textContent = S.title; $('intro').textContent = S.intro; $('lEmail').textContent = S.email; $('lCode').textContent = S.code;
+$('go').textContent = S.go; $('lostH').textContent = S.lostH; $('lostP').textContent = S.lostP; $('resend').textContent = S.resend;
+fetch('/api/config').then((r) => r.json()).then((c) => { $('biz').textContent = c.business.name; }).catch(() => {});
+const post = async (path, body) => {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+  return d;
+};
+$('f').onsubmit = async (e) => {
+  e.preventDefault();
+  $('msg').className = 'hidden'; $('go').disabled = true; $('go').textContent = S.opening;
+  try {
+    const d = await post('/api/portal/login', { email: $('email').value, code: $('code').value });
+    location.href = d.url + (LANG === 'es' ? '&lang=es' : '');
+  } catch (err) { $('msg').className = 'error'; $('msg').textContent = err.message; $('go').disabled = false; $('go').textContent = S.go; }
+};
+$('resend').onclick = async () => {
+  if (!$('email').value.trim()) { $('resendMsg').textContent = S.needEmail; $('email').focus(); return; }
+  try { await post('/api/portal/resend', { email: $('email').value }); $('resendMsg').textContent = S.sent; }
+  catch (err) { $('resendMsg').textContent = err.message; }
+};
+</script>
+</body>
+</html>

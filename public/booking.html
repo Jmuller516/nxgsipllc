@@ -49,6 +49,42 @@ async function load() {
   if (want && $(want)) setTimeout(() => $(want).scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 }
 
+const incLi = (x) => String(x || '').split('\n').filter((y) => y.trim()).map((y) => `<li>${esc(y)}</li>`).join('');
+
+// What's left to do, in the order a parent needs it.
+function todoCard() {
+  const st = B.detailsStatus, g = B.guests;
+  const items = [];
+  const owes = B.status === 'confirmed' && B.balanceCents > 0;
+  items.push({ done: !owes, text: owes ? t('todoPay', money(B.balanceCents), fmtDate(B.balanceDueDate)) : t('todoPaid'), href: '#pay' });
+  items.push({ done: st.complete, text: st.complete ? t('todoDetailsDone') : t('todoDetails', st.missing.join(', ')), href: '#details' });
+  const replied = g.yes + g.no;
+  items.push({ done: replied > 0, text: replied > 0 ? t('todoInviteDone', replied) : t('todoInvite'), href: '#invites' });
+  const needSign = g.missingWaivers.length;   // already includes the birthday child
+  if (needSign > 0 || g.waiversNeeded > 0) items.push({ done: needSign === 0, text: needSign === 0 ? t('todoWaiversDone') : t('todoWaivers', needSign), href: '#invites' });
+  if (B.canReview && !B.review) items.push({ done: false, text: t('todoReview'), href: '#review' });
+  const open = items.filter((x) => !x.done).length;
+  return `<div class="card" id="todo">
+    <div class="card-head"><h2>${t('todoTitle')}</h2><span class="badge ${open ? 'warn' : 'ok'}">${open ? esc(t('toGo', open)) : t('complete')}</span></div>
+    <ul class="todo">${items.map((x) => `<li class="${x.done ? 'done' : ''}"><span class="mark" aria-hidden="true">${x.done ? '✓' : ''}</span><span class="txt">${esc(x.text)}</span>${x.done ? '' : `<a href="${x.href}">${t('todoOpen')}</a>`}</li>`).join('')}</ul>
+    ${open ? '' : `<p class="muted" style="margin-bottom:0">${t('todoAllSet')}</p>`}
+    ${B.accessCode ? `<div class="codebox"><div class="muted">${t('codeTitle')}</div><code>${esc(B.accessCode)}</code><div class="muted">${esc(t('codeHint', location.origin + '/my-party'))}</div></div>` : ''}
+  </div>`;
+}
+
+// Everything included with the package and each add-on they picked.
+function getCard() {
+  const pkg = CFG.packages.find((p) => p.id === B.packageId);
+  const addons = B.quote.lines.filter((l) => l.kind === 'addon');
+  return `<div class="card" id="get">
+    <h2 style="margin-top:0">${t('getTitle')}</h2>
+    <p style="margin:0 0 4px"><b>${esc(B.packageName)}</b> · ${B.kids} ${esc(t('kids').toLowerCase())}</p>
+    ${pkg && pkg.includes ? `<ul class="incl">${incLi(pkg.includes)}</ul>` : ''}
+    <h3 style="margin:14px 0 4px">${t('getAddons')}</h3>
+    ${addons.length ? addons.map((l) => { const a = (CFG.addOns || []).find((x) => x.id === l.id); return `<p style="margin:8px 0 2px"><b>${esc(l.name)}</b>${l.qty > 1 ? ` × ${l.qty}` : ''}</p>${a && a.includes ? `<ul class="incl">${incLi(a.includes)}</ul>` : ''}`; }).join('') : `<p class="muted">${t('getNone')}</p>`}
+  </div>`;
+}
+
 function render() {
   const active = ['confirmed', 'paid'].includes(B.status);
   const st = B.detailsStatus;
@@ -76,6 +112,9 @@ function render() {
       <h2>${t('schedule')}</h2>
       <ul class="schedule">${B.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
     </div>
+
+    ${active ? todoCard() : ''}
+    ${active ? getCard() : ''}
 
     ${B.videoUrl ? `<div class="card"><h2 style="margin-top:0">🎬 ${t('videoTitle')}</h2><a class="btn" href="${esc(B.videoUrl)}" target="_blank" rel="noopener">${t('watchVideo')}</a></div>` : ''}
 
@@ -175,11 +214,13 @@ function render() {
       ${B.review ? `<p>${esc(t('thanksReview', '★'.repeat(B.review.rating)))}</p>` : `
       <form id="reviewForm" novalidate>
         <div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-label="${n}">★</button>`).join('')}</div>
-        <label for="rComment">${t('tellUs')} <span class="muted">${t('optional')}</span></label><textarea id="rComment" rows="3"></textarea>
+        <p class="counter" id="rStars" aria-live="polite">${t('reviewPickStar')}</p>
+        <label for="rComment">${t('tellUs')}</label><textarea id="rComment" rows="5" minlength="${CFG.reviewMinChars}" required></textarea>
+        <p class="counter" id="rCount">${esc(t('reviewMin', CFG.reviewMinChars))}</p>
         <label for="rName">${t('nameToShow')} <span class="muted">${t('nameEg')}</span></label><input id="rName" value="${esc(B.parentFirstName)}">
         <label class="check"><input type="checkbox" id="rPublish"> ${esc(t('mayShare', CFG.business.shortName || CFG.business.name))}</label>
         <div id="rMsg" class="hidden"></div>
-        <div class="actions"><button class="btn" type="submit">${t('sendReview')}</button></div>
+        <div class="actions"><button class="btn" type="submit" id="rSend" disabled>${t('sendReview')}</button></div>
       </form>`}
     </div>` : ''}
 
@@ -301,9 +342,19 @@ function wire() {
   };
 
   let rating = 0;
+  const minChars = CFG.reviewMinChars || 100;
+  const reviewReady = () => {
+    const n = $('rComment').value.replace(/\s+/g, ' ').trim().length;
+    $('rCount').textContent = n >= minChars ? t('reviewCount', n, minChars) + ' ✓' : t('reviewCount', n, minChars) + ' · ' + t('reviewMin', minChars);
+    $('rCount').classList.toggle('ok', n >= minChars);
+    $('rStars').textContent = rating ? t('reviewRated', rating) : t('reviewPickStar');
+    $('rSend').disabled = !(rating >= 1 && n >= minChars);
+  };
+  if ($('reviewForm')) $('rComment').addEventListener('input', reviewReady);
   document.querySelectorAll('[data-star]').forEach((s) => s.onclick = () => {
     rating = Number(s.dataset.star);
     document.querySelectorAll('[data-star]').forEach((x) => x.classList.toggle('on', Number(x.dataset.star) <= rating));
+    if ($('reviewForm')) reviewReady();
   });
   if ($('reviewForm')) $('reviewForm').onsubmit = async (e) => {
     e.preventDefault();

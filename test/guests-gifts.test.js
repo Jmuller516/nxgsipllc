@@ -306,7 +306,14 @@ test('reviews: requested the day after, private unless allowed and approved', as
     assert.ok(t.sentEmails.some((m) => /How was Liam's party/.test(m.subject)));
     assert.equal((await t.call('GET', `/api/bookings/${b.ref}?t=${b.t}`)).json.canReview, true);
     const r = await t.call('POST', `/api/bookings/${b.ref}/review?t=${b.t}`, { rating: 5, comment: 'Amazing!', displayName: 'Dana R.', mayPublish: true });
-    assert.equal(r.status, 200);
+    assert.equal(r.status, 400, 'too short');
+    assert.match(r.json.error, /at least 100 characters/);
+    const spam = await t.call('POST', `/api/bookings/${b.ref}/review?t=${b.t}`, { rating: 5, comment: 'great '.repeat(20), mayPublish: true });
+    assert.equal(spam.status, 400, 'long but repetitive');
+    assert.equal((await t.call('POST', `/api/bookings/${b.ref}/review?t=${b.t}`, { rating: 0, comment: 'Liam had a fantastic time. The staff were friendly, the kids loved the field games and the video game room, and the food came out right on time.' })).status, 400, 'needs a star rating');
+    assert.equal((await t.call('POST', `/api/bookings/${b.ref}/review?t=WRONG`, { rating: 5, comment: 'Liam had a fantastic time. The staff were friendly, the kids loved the field games and the video game room, and the food came out right on time.' })).status, 404, 'needs the booking link');
+    const ok = await t.call('POST', `/api/bookings/${b.ref}/review?t=${b.t}`, { rating: 5, comment: 'Liam had a fantastic time. The staff were friendly, the kids loved the field games and the video game room, and the food came out right on time.', displayName: 'Dana R.', mayPublish: true });
+    assert.equal(ok.status, 200);
     assert.equal((await t.call('GET', '/api/reviews')).json.count, 0, 'hidden until staff approve');
     const list = (await t.call('GET', '/api/admin/reviews', null, t.auth)).json;
     await t.call('POST', `/api/admin/reviews/${list[0].id}`, { approved: true }, t.auth);
@@ -317,7 +324,7 @@ test('reviews: requested the day after, private unless allowed and approved', as
 
     const priv = await t.bookAndPay({ ...party, partyDate: '2026-12-05', email: 'p@example.com' });
     t.setNow('2026-12-06T15:00:00Z');
-    await t.call('POST', `/api/bookings/${priv.ref}/review?t=${priv.t}`, { rating: 3, comment: 'ok', mayPublish: false });
+    await t.call('POST', `/api/bookings/${priv.ref}/review?t=${priv.t}`, { rating: 3, comment: 'Liam had a fantastic time. The staff were friendly, the kids loved the field games and the video game room, and the food came out right on time.', mayPublish: false });
     const id = (await t.call('GET', '/api/admin/reviews', null, t.auth)).json.find((x) => x.rating === 3).id;
     assert.match((await t.call('POST', `/api/admin/reviews/${id}`, { approved: true }, t.auth)).json.error, /permission/);
   } finally { t.close(); }
@@ -335,5 +342,47 @@ test('details reminder goes out 10 days before the party if anything is missing'
     const m = t.sentEmails.find((x) => /A few details needed/.test(x.subject));
     assert.ok(m);
     assert.match(m.html, /sport theme/);
+  } finally { t.close(); }
+});
+
+test('parent portal: access code in the confirmation email opens the party page', async () => {
+  const t = await start();
+  try {
+    const b = await t.bookAndPay(party);
+    await t.app.notifier.flush();
+    const conf = t.sentEmails.find((m) => /Party confirmed/.test(m.subject));
+    const code = /\b([A-Z2-9]{4}-[A-Z2-9]{4})\b/.exec(conf.html.replace(/<[^>]+>/g, ' '))?.[1];
+    assert.ok(code, 'confirmation email carries a code');
+    assert.match(conf.html, /\/my-party/);
+    assert.equal((await t.call('GET', `/api/bookings/${b.ref}?t=${b.t}`)).json.accessCode, code);
+    const page = await t.call('GET', '/my-party');
+    assert.equal(page.status, 200);
+    assert.match(page.text, /Open your party page|portal\/login/);
+
+    const login = await t.call('POST', '/api/portal/login', { email: ' DANA@example.com ', code: code.toLowerCase().replace('-', ' ') });
+    assert.equal(login.status, 200);
+    assert.equal(login.json.url, `/booking/${b.ref}?t=${b.t}`);
+    assert.equal((await t.call('POST', '/api/portal/login', { email: 'someone@else.com', code })).status, 400, 'wrong email');
+    assert.equal((await t.call('POST', '/api/portal/login', { email: 'dana@example.com', code: 'AAAA-AAAA' })).status, 400, 'wrong code');
+  } finally { t.close(); }
+});
+
+test('parent portal: "email me my code" re-sends it and does not reveal who has booked', async () => {
+  const t = await start();
+  try {
+    const b = await t.bookAndPay(party);
+    const before = t.sentEmails.length;
+    const code = (await t.call('GET', `/api/bookings/${b.ref}?t=${b.t}`)).json.accessCode;
+    assert.equal((await t.call('POST', '/api/portal/resend', { email: 'nobody@example.com' })).status, 200);
+    assert.equal((await t.call('POST', '/api/portal/resend', { email: 'dana@example.com' })).status, 200);
+    await t.app.notifier.flush();
+    const sent = t.sentEmails.slice(before).filter((m) => m.to === 'dana@example.com' && /party page code/i.test(m.subject));
+    assert.equal(sent.length, 1);
+    assert.ok(sent[0].html.includes(code));
+    assert.ok(!t.sentEmails.some((m) => m.to === 'nobody@example.com'));
+    // asking twice in the same hour doesn't send twice
+    await t.call('POST', '/api/portal/resend', { email: 'dana@example.com' });
+    await t.app.notifier.flush();
+    assert.equal(t.sentEmails.filter((m) => /party page code/i.test(m.subject)).length, 1);
   } finally { t.close(); }
 });

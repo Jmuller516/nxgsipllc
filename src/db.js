@@ -343,6 +343,8 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
   addColumn(db, 'waivers', 'marketing_opt_in', 'INTEGER NOT NULL DEFAULT 0');
   addColumn(db, 'bookings', 'theme', 'TEXT');
   addColumn(db, 'bookings', 'host_name', 'TEXT');
+  addColumn(db, 'bookings', 'access_code', 'TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_access_code ON bookings(access_code) WHERE access_code IS NOT NULL');
   addColumn(db, 'bookings', 'invite_token', 'TEXT');
   addColumn(db, 'bookings', 'details_json', 'TEXT');
   addColumn(db, 'bookings', 'sms_opt_in', 'INTEGER NOT NULL DEFAULT 0');

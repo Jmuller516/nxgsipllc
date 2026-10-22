@@ -26,6 +26,11 @@ const WORDS = {
     who: (b) => (b.child_name ? `${b.child_name}'s party` : 'your party'),
     footer: 'Reply to this email with any questions.',
     viewBooking: 'View my booking',
+    codeBox: (code, url) => `<b>Your party page code: <span style="font-size:18px;letter-spacing:.08em">${code}</span></b><br>Keep this email. You can always open your party page at <a href="${url}">${url}</a> with your email and this code. It shows everything you're getting and what's left to do.`,
+    codeText: (code, url) => `Your party page code: ${code}. Open your party page anytime at ${url} with your email and this code.`,
+    codeSubject: 'Your NXGS party page code',
+    codeHeading: 'Your party page code',
+    codeBody: (name) => `Hi ${name}, here is the code for your party page. Enter it with the email you booked with.`,
     confirmedSubject: (b, d) => `Party confirmed — ${d} at ${b.timeLabel} (${b.ref})`,
     confirmedHeading: (b, who) => (b.status === 'paid' ? `You're booked! ${who} is paid in full` : `You're booked! Deposit received for ${who}`),
     hiThanks: (b, biz) => `Hi ${b.parent_name}, thanks for booking with ${biz}!`,
@@ -107,6 +112,11 @@ const WORDS = {
     who: (b) => (b.child_name ? `la fiesta de ${b.child_name}` : 'su fiesta'),
     footer: 'Responda a este correo si tiene preguntas.',
     viewBooking: 'Ver mi reserva',
+    codeBox: (code, url) => `<b>Código de su página de la fiesta: <span style="font-size:18px;letter-spacing:.08em">${code}</span></b><br>Guarde este correo. Siempre puede abrir su página en <a href="${url}">${url}</a> con su correo y este código. Muestra todo lo que incluye su fiesta y lo que falta por hacer.`,
+    codeText: (code, url) => `Código de su página de la fiesta: ${code}. Ábrala en ${url} con su correo y este código.`,
+    codeSubject: 'Su código para la página de la fiesta',
+    codeHeading: 'Su código de la página de la fiesta',
+    codeBody: (name) => `Hola ${name}, aquí está el código de la página de su fiesta. Ingréselo con el correo que usó para reservar.`,
     confirmedSubject: (b, d) => `Fiesta confirmada — ${d} a las ${b.timeLabel} (${b.ref})`,
     confirmedHeading: (b, who) => (b.status === 'paid' ? `¡Reserva lista! ${cap(who)} está pagada por completo` : `¡Reserva lista! Recibimos el depósito de ${who}`),
     hiThanks: (b, biz) => `Hola ${b.parent_name}, ¡gracias por reservar con ${biz}!`,
@@ -236,6 +246,7 @@ function createNotifier(db, svc, opts = {}) {
   const biz = cfg.business;
 
   const customerLink = (b) => `${baseUrl()}/booking/${b.ref}?t=${b.token}`;
+  const portalLink = () => `${baseUrl()}/my-party`;
   const inviteLink = (b) => `${baseUrl()}/invite/${b.invite_token}`;
   const bookLink = (params) => `${baseUrl()}/book?${new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== ''))}`;
   const date = (ymd, lang) => i18n.fmtDate(ymd, lang);
@@ -333,9 +344,10 @@ function createNotifier(db, svc, opts = {}) {
             <li>${esc(w.stepDetails(needsShirts(b)))}</li>
             <li>${esc(w.stepInvite)} <a href="${esc(inviteLink(b))}">${esc(inviteLink(b))}</a>. ${esc(w.stepInviteAfter)}</li>
           </ol>
+          ${b.access_code ? `<p style="background:#eef4ff;padding:12px;border-radius:8px">${w.codeBox(esc(b.access_code), esc(portalLink()))}</p>` : ''}
           ${b.referral_code ? `<p style="background:#f4f6f9;padding:10px 12px;border-radius:8px">${w.referralBox(esc(b.referral_code), money(cfg.referral.friendDiscountCents), money(cfg.referral.referrerCreditCents))}</p>` : ''}
           <p style="color:#5b6676;font-size:13px">${esc(w.depositNote(cfg.payments.depositPercent))}</p>`, { label: w.viewBooking, url: customerLink(b) }, { lang: L }),
-        text: `${w.confirmedText(b, biz.name)}\n\n${textFacts(b)}\n\n${textMoney(b)}\n\n${w.stepInvite} ${inviteLink(b)}\n\n${w.viewBooking}: ${customerLink(b)}`,
+        text: `${w.confirmedText(b, biz.name)}\n\n${textFacts(b)}\n\n${textMoney(b)}\n\n${w.stepInvite} ${inviteLink(b)}\n\n${b.access_code ? w.codeText(b.access_code, portalLink()) + '\n\n' : ''}${w.viewBooking}: ${customerLink(b)}`,
       });
       queueSms({ kind: 'sms_confirmed', booking: b, dedupeKey: `confirmed:${b.id}`, body: L === 'es'
         ? `${cap(who(b))} está reservada para el ${date(b.party_date, L)} a las ${b.timeLabel}. Detalles e invitación: ${customerLink(b)}`
@@ -695,7 +707,25 @@ function createNotifier(db, svc, opts = {}) {
     return true;
   }
 
-  return { onPayment, onLead, onReschedule, onCustomerCancel, onVideo, onWaitlistOpen, onGiftActivated, onReferralCredit, onVendorOrder, onVendorApplied, queueReminders, flush, tick, list, get, resend, enabled: !!sender, smsEnabled: !!smsSender };
+  /** "Email me my code": one email per active party on that address (at most one per party per hour). */
+  function sendAccessCodes(bookings) {
+    const bucket = Math.floor(clock().getTime() / 3600000);
+    let n = 0;
+    for (const b of bookings) {
+      if (!b.access_code) continue;
+      const L = b.lang === 'es' ? 'es' : 'en';
+      const w = W(L);
+      n += queue({
+        kind: 'access_code', to: b.email, bookingId: b.id, dedupeKey: `access_code:${b.id}:${bucket}`,
+        subject: w.codeSubject,
+        html: wrap(w.codeHeading, `<p>${esc(w.codeBody(b.parent_name))}</p>${partyFacts(b)}<p style="background:#eef4ff;padding:12px;border-radius:8px">${w.codeBox(esc(b.access_code), esc(portalLink()))}</p>`, { label: w.viewBooking, url: customerLink(b) }, { lang: L }),
+        text: `${w.codeBody(b.parent_name)}\n\n${w.codeText(b.access_code, portalLink())}\n\n${customerLink(b)}`,
+      }) ? 1 : 0;
+    }
+    return n;
+  }
+
+  return { sendAccessCodes, onPayment, onLead, onReschedule, onCustomerCancel, onVideo, onWaitlistOpen, onGiftActivated, onReferralCredit, onVendorOrder, onVendorApplied, queueReminders, flush, tick, list, get, resend, enabled: !!sender, smsEnabled: !!smsSender };
 }
 
 module.exports = { createNotifier, resendSend, twilioSend, toE164, WORDS };

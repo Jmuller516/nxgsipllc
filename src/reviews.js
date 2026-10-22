@@ -2,7 +2,7 @@
 const config = require('./config');
 const { BookingError, todayLocal } = require('./bookings');
 
-const clean = (v, max = 1000) => { const s = String(v ?? '').trim(); return s ? s.slice(0, max) : null; };
+const clean = (v, max = 1000) => { const s = String(v ?? '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim(); return s ? s.slice(0, max) : null; };
 
 function createReviews(db, svc, opts = {}) {
   const cfg = opts.config || config;
@@ -21,7 +21,17 @@ function createReviews(db, svc, opts = {}) {
     if (!canReview(b)) throw new BookingError('Reviews open after your party.');
     const rating = Math.round(Number(input.rating));
     if (!(rating >= 1 && rating <= 5)) throw new BookingError('Please choose 1 to 5 stars.');
-    const fields = [rating, clean(input.comment), clean(input.displayName, 60), input.mayPublish ? 1 : 0];
+    // Only a verified booking can review (one per party, after the party). The text has to be a real review.
+    const comment = clean(input.comment);
+    const minChars = cfg.reviews.minChars || 100;
+    const words = (comment || '').split(/\s+/).filter(Boolean);
+    if (!comment || comment.length < minChars) {
+      throw new BookingError(`Please tell us a little more: reviews need at least ${minChars} characters (you have ${comment ? comment.length : 0}).`);
+    }
+    if (words.length < (cfg.reviews.minWords || 10) || new Set(words.map((w) => w.toLowerCase())).size < 6) {
+      throw new BookingError('Please write a few full sentences about your experience.');
+    }
+    const fields = [rating, comment, clean(input.displayName, 60), input.mayPublish ? 1 : 0];
     if (forBooking(bookingId)) {
       db.prepare(`UPDATE reviews SET rating = ?, comment = ?, display_name = ?, may_publish = ?, approved = 0 WHERE booking_id = ?`).run(...fields, bookingId);
     } else {

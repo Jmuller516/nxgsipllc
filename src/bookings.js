@@ -229,6 +229,38 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return `NXGS-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   }
 
+  /** The short code a family types (with their email) to open their party page. */
+  function makeAccessCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let i = 0; i < 20; i++) {
+      let c = '';
+      for (const x of crypto.randomBytes(8)) c += alphabet[x % alphabet.length];
+      const code = `${c.slice(0, 4)}-${c.slice(4)}`;
+      if (!db.prepare('SELECT 1 FROM bookings WHERE access_code = ?').get(code)) return code;
+    }
+    throw new Error('Could not make an access code.');
+  }
+  // Parties confirmed before access codes existed get one too.
+  for (const r of db.prepare(`SELECT id FROM bookings WHERE access_code IS NULL AND status IN ('confirmed','paid')`).all()) {
+    db.prepare('UPDATE bookings SET access_code = ? WHERE id = ?').run(makeAccessCode(), r.id);
+  }
+
+  /** Open a party from the email on the booking plus the access code from the confirmation email. */
+  function findByAccess(email, code) {
+    const c = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const e = String(email || '').trim().toLowerCase();
+    if (c.length !== 8 || !e) return null;
+    const r = db.prepare(`SELECT id, email FROM bookings WHERE access_code = ? AND status IN ('confirmed','paid')`).get(`${c.slice(0, 4)}-${c.slice(4)}`);
+    return r && String(r.email).trim().toLowerCase() === e ? get(r.id) : null;
+  }
+  /** Active parties for an email, used to re-send a forgotten code. */
+  function activeByEmail(email) {
+    const e = String(email || '').trim().toLowerCase();
+    if (!e) return [];
+    return db.prepare(`SELECT id FROM bookings WHERE lower(email) = ? AND status IN ('confirmed','paid') AND party_date >= date(?, '-60 day') ORDER BY party_date`)
+      .all(e, todayLocal(clock(), cfg.business.timezone)).map((r) => get(r.id));
+  }
+
   /**
    * Record money received. Idempotent per Stripe session.
    * kind: deposit | balance | full ; method: stripe | card_in_person | cash | check | demo
@@ -252,6 +284,9 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
         .run(paid, status, bookingId);
       if (!b.referral_code && status !== 'cancelled') {
         db.prepare('UPDATE bookings SET referral_code = ? WHERE id = ?').run(makeReferralCode(b), bookingId);
+      }
+      if (!b.access_code && status !== 'cancelled') {
+        db.prepare('UPDATE bookings SET access_code = ? WHERE id = ?').run(makeAccessCode(), bookingId);
       }
       db.exec('COMMIT');
       const booking = get(bookingId);
@@ -542,7 +577,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
   }
 
   return { canReschedule, rescheduleTimes, reschedule, cancelTerms, customerCancel, recordRefund, setVideo, bookingPhases, todayLocal: () => todayLocal(clock(), cfg.business.timezone), validateDate,
-    phasesFor, location, locCfg, findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+    phasesFor, location, locCfg, findReferral, findByAccess, activeByEmail, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
 }
 
 /** Where a booking came from, for the Insights tab: web, chat, waitlist, recovery, instagram... */

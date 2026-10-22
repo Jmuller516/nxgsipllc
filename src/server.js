@@ -113,6 +113,7 @@ function createApp(db, opts = {}) {
     partyDays: partyDaysFor(config.defaultLocation),
     locations: config.locations.filter((l) => l.public).map((l) => ({ id: l.id, name: l.name, shortName: l.shortName, address: l.address, phone: l.phone, partyDays: partyDaysFor(l.id) })),
     defaultLocation: config.defaultLocation,
+    reviewMinChars: config.reviews.minChars || 100,
     stripe: stripe.enabled(),
     assistant: { enabled: assistant.enabled(), name: assistant.name() },
     compareRows: config.compareRows || [],
@@ -203,6 +204,28 @@ function createApp(db, opts = {}) {
   route('POST', '/api/bookings/:ref/review', ({ params, query, body }) => {
     const b = authorizedBooking(params.ref, query.t);
     return reviews.submit(b.id, body);
+  });
+
+  // Parent portal: open the party page with the booking email + the access code from the confirmation email.
+  const portalTries = new Map();   // ip -> { n, reset }
+  function portalGuard(req) {
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'x';
+    const now = Date.now();
+    const t = portalTries.get(ip);
+    if (!t || t.reset < now) { portalTries.set(ip, { n: 1, reset: now + 15 * 60000 }); return; }
+    if (++t.n > 12) throw new BookingError('Too many tries. Please wait a few minutes and try again.');
+  }
+  route('POST', '/api/portal/login', ({ req, body }) => {
+    portalGuard(req);
+    const b = svc.findByAccess(body.email, body.code);
+    if (!b) throw new BookingError("We couldn't find a party with that email and code. Check the code in your confirmation email, or tap “Email me my code”.");
+    return { url: `/booking/${b.ref}?t=${b.token}` };
+  });
+  route('POST', '/api/portal/resend', ({ req, body }) => {
+    portalGuard(req);
+    notifier.sendAccessCodes(svc.activeByEmail(body.email));
+    kick();
+    return { ok: true };   // same answer whether or not the address has a party, so nobody can probe who has booked
   });
 
   // Invitations, RSVPs and waivers
@@ -593,6 +616,7 @@ function createApp(db, opts = {}) {
       locationId: b.location_id,
       inviteToken: ['confirmed', 'paid'].includes(b.status) ? b.invite_token : null,
       referralCode: ['confirmed', 'paid'].includes(b.status) ? b.referral_code : null,
+      accessCode: ['confirmed', 'paid'].includes(b.status) ? b.access_code : null,
       guests: g,
       canReview: reviews.canReview(b), review: review ? { rating: review.rating, comment: review.comment } : null,
       stripe: stripe.enabled(),
@@ -773,6 +797,7 @@ function createApp(db, opts = {}) {
       // Pages
       if (req.method === 'GET' && (pathname === '/' || pathname === '/home')) return sendFile(res, 'home.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/book') return sendFile(res, 'book.html', { embeddable: true });
+      if (req.method === 'GET' && (pathname === '/my-party' || pathname === '/portal')) return sendFile(res, 'portal.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/calendar') return sendFile(res, 'calendar.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/chat') return sendFile(res, 'chat.html', { embeddable: true });
       const feed = /^\/feeds\/([^/]+)\/parties\.ics$/.exec(pathname);

@@ -16,7 +16,8 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - **Digital invitation**: a link to share by text, email or social media. Guests see the date, time, theme and schedule, add it to their calendar, RSVP with allergies, and sign the waiver right there. The family sees who's coming and whose waiver is missing.
 - **Gift cards and party credit** can pay the balance.
 - **Referral code**: friends get money off their party, and the family gets party credit when they book.
-- **Review** the day after the party.
+- **Party page code**: the confirmation email includes a short code (like `K7M2-9QXP`). Parents open `/my-party`, enter the email they booked with plus the code, and land on their party page. A "Can't find your code?" button emails it again. The page opens with a **checklist** (balance, party details, invitations, waivers, review) and **What you're getting**: everything in the package and each add-on. Wrong guesses are limited, and the "email me my code" button never says whether an address has a party.
+- **Review** the day after the party: 1 to 5 stars and at least 100 characters (set `reviews.minChars` in `src/config.js`). Only a family with a paid booking can review, once per party, after the party date; the text must be real sentences, not repeated words; and a review shows on the website only if the parent allows it and staff approve it.
 
 **Waivers** (`/waiver`): a liability waiver with a finger-drawn signature, valid for a year per child. Guests sign from the invitation. Walk-ins sign on a front-desk tablet at `/waiver`. ⚠️ The waiver text is a **sample** until you paste in your attorney's or insurer's version (Admin → Settings).
 

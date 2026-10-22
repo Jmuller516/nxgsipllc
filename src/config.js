@@ -350,6 +350,8 @@ module.exports = {
   },
 
   reviews: {
+    minChars: 100,               // a review must say at least this much (keeps out drive-by and fake reviews)
+    minWords: 10,
     askDaysAfter: 1,             // review request goes out this many days after the party
     googleReviewUrl: null,       // e.g. your Google Business "write a review" link; offered after 4–5 star reviews
   },

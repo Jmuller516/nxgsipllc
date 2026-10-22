@@ -316,8 +316,7 @@ test('HTTP: product photos upload, show on the booking page, and can be removed'
   const auth = { Authorization: 'Basic ' + Buffer.from('admin:secret').toString('base64'), 'Content-Type': 'application/json' };
   try {
     let cfg = await (await fetch(`${base}/api/config`)).json();
-    assert.equal(cfg.addOns.find((a) => a.id === 'medal').photo, '/static/img/addons/medal.svg');
-    assert.equal((await fetch(`${base}/static/img/addons/medal.svg`)).headers.get('content-type'), 'image/svg+xml');
+    assert.equal(cfg.addOns.find((a) => a.id === 'medal').photo, '', 'no picture until a real photo is uploaded');
 
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
     const bad = await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'POST', headers: auth, body: JSON.stringify({ dataUrl: 'data:text/html;base64,PGI+' }) });
@@ -331,11 +330,11 @@ test('HTTP: product photos upload, show on the booking page, and can be removed'
     assert.equal(img.headers.get('content-type'), 'image/png');
     assert.deepEqual(Buffer.from(await img.arrayBuffer()), png);
 
-    // Resetting prices keeps photos; removing the photo brings back the illustration.
+    // Resetting prices keeps photos; removing the photo leaves the item without a picture.
     await fetch(`${base}/api/admin/pricing/reset`, { method: 'POST', headers: auth, body: '{}' });
     assert.equal((await (await fetch(`${base}/api/config`)).json()).addOns.find((a) => a.id === 'medal').photo, photo);
     await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'DELETE', headers: auth });
-    assert.equal((await (await fetch(`${base}/api/config`)).json()).addOns.find((a) => a.id === 'medal').photo, '/static/img/addons/medal.svg');
+    assert.equal((await (await fetch(`${base}/api/config`)).json()).addOns.find((a) => a.id === 'medal').photo, '');
     assert.equal((await fetch(base + photo)).status, 404);
     assert.equal((await fetch(`${base}/api/admin/addons/medal/photo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
   } finally {

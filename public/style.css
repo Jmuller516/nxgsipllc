@@ -229,3 +229,16 @@ details.faq p { margin: 8px 0 0; }
 .pass { text-align: center; }
 .pass svg, .pass img { width: min(220px, 70vw); height: auto; background: #fff; padding: 10px; border-radius: 12px; }
 .topline #langBox { margin-left: auto; }
+
+/* Party page checklist */
+.todo { list-style: none; margin: 0; padding: 0; }
+.todo li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
+.todo li:first-child { border-top: 0; }
+.todo .mark { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 800; margin-top: 1px; }
+.todo li.done .mark { background: var(--ok); border-color: var(--ok); color: #fff; }
+.todo li.done span.txt { color: var(--muted, #5b6676); }
+.todo a { margin-left: auto; flex: none; font-weight: 700; }
+.codebox { background: color-mix(in srgb, var(--brand) 8%, transparent); border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
+.codebox code { font-size: 1.15rem; font-weight: 800; letter-spacing: .08em; }
+.counter { font-size: .85rem; color: var(--muted, #5b6676); margin: 4px 0 0; }
+.counter.ok { color: var(--ok); }
