@@ -53,6 +53,8 @@ test('locations: Farmingdale is public, Massapequa is staff-only, calendars are 
     assert.equal(t.app.svc.calendarMonth('2026-11', 'massapequa').days.find((d) => d.date === '2026-11-28').status, 'closed');
     assert.equal(t.app.svc.calendarMonth('2026-11', 'farmingdale').days.find((d) => d.date === '2026-11-28').status, 'open');
 
+    // Massapequa has no party hours until staff set them; give it weekend hours for this check.
+    require('../src/config').locations.find((l) => l.id === 'massapequa').partyHours = { 0: { open: '10:00', close: '19:00' }, 1: null, 2: null, 3: null, 4: null, 5: null, 6: { open: '10:00', close: '20:00' } };
     // Each location has its own capacity: two parties at noon in Farmingdale doesn't fill Massapequa
     const b = await t.bookAndPay(party);
     assert.equal(b.location_id, 'farmingdale');

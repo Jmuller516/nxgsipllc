@@ -47,7 +47,7 @@ function createAssistant(db, svc, opts = {}) {
     const dayName = (ymd) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
     const upcoming = Array.from({ length: 28 }, (_, i) => addDays(today, i)).map((d) => `${dayName(d)} = ${d}`).join('; ');
     const days = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-    const hours = Object.entries(cfg.partyHours).filter(([, h]) => h).map(([d, h]) => `${days[d]} ${scheduling.label12(scheduling.toMinutes(h.open))}–${scheduling.label12(scheduling.toMinutes(h.close))}`).join(', ');
+    const hours = Object.entries(cfg.partyHours).filter(([, h]) => h).sort(([a], [b]) => ((Number(a) + 6) % 7) - ((Number(b) + 6) % 7)).map(([d, h]) => `${days[d]} ${scheduling.label12(scheduling.toMinutes(h.open))}–${scheduling.label12(scheduling.toMinutes(h.close))}`).join(', ');
     const pkgs = cfg.packages.filter((p) => p.active !== false).map((p) => `- ${p.name} (id "${p.id}"): ${money(p.priceCents)}, includes ${p.includedKids} kids, ${money(p.extraKidCents)} per extra child. Includes: ${(p.includes || p.description).split('\n').join('; ')}`).join('\n');
     const cats = Object.fromEntries((cfg.addOnCategories || []).map((c) => [c.id, c.name]));
     const addOns = cfg.addOns.filter((a) => a.active !== false).map((a) => `- ${a.name} (id "${a.id}", ${cats[a.category] || a.category}): ${money(a.priceCents)}/${a.unit}${a.minQty > 1 ? `, min ${a.minQty}` : ''}${a.maxQty === 1 ? ', one per party' : ''}${a.leadDays ? `, order ${a.leadDays}+ days before the party` : ''}${a.includes ? `. Includes: ${a.includes.split('\n').join('; ')}` : ''}`).join('\n');

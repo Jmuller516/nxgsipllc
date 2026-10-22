@@ -244,7 +244,7 @@ async function init() {
   const max = new Date(today); max.setDate(max.getDate() + CFG.maxDaysAhead);
   $('date').min = ymdLocal(min); $('date').max = ymdLocal(max);
   NXSponsors.mount($('sponsorBox'), 'booking', LOCATION);
-  const daysLine = () => t('partiesRun', listJoin(CFG.locations.find((l) => l.id === LOCATION).partyDays.map((d) => t('days')[d])));
+  const daysLine = () => t('partiesRun', listJoin([...CFG.locations.find((l) => l.id === LOCATION).partyDays].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => t('days')[d])));
   window.onLocationChange = () => { $('daysHint').textContent = daysLine(); loadSlots(); scheduleQuote(); };
   $('daysHint').textContent = daysLine();
   showSchedule();
