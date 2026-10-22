@@ -45,7 +45,7 @@ function load(db) {
 function apply(db, cfg = config) {
   const o = load(db);
   cfg.packages.splice(0, cfg.packages.length, ...defaults.packages.map((p) => ({ active: true, ...p, ...(o.packages[p.id] || {}) })));
-  cfg.addOns.splice(0, cfg.addOns.length, ...defaults.addOns.map((a) => ({ active: true, photo: `/static/img/addons/${a.id}.svg`, ...a, ...(o.addOns[a.id] || {}) })));
+  cfg.addOns.splice(0, cfg.addOns.length, ...defaults.addOns.map((a) => ({ active: true, photo: '', ...a, ...(o.addOns[a.id] || {}) })));
   Object.assign(cfg.payments, defaults.payments, pick(o.party, ['depositPercent', 'balanceDueDaysBefore']));
   cfg.tax.rate = o.party.taxRatePercent != null ? o.party.taxRatePercent / 100 : defaults.tax.rate;
   cfg.timePricing = defaults.timePricing.map((r) => ({ active: true, ...r, ...(o.timePricing[r.id] || {}) }));

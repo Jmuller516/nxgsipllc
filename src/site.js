@@ -210,7 +210,7 @@ function landing(db, { lang = 'en', baseUrl, cfg = config }) {
   const headline = es ? `Fiestas de cumpleaños deportivas en ${loc.shortName}` : seo.headline;
   const intro = es ? 'Juegos en la cancha de césped, un salón de videojuegos y un salón de fiestas privado, con un anfitrión que lo organiza todo. Elija su paquete y reserve en línea en minutos.' : seo.intro;
   const desc = `${headline}. ${pk.map((p) => `${p.name} ${money(p.priceCents)}`).join(' · ')}. ${es ? 'Reserve en línea.' : 'Book online.'}`.slice(0, 300);
-  const photos = c.photos.length ? c.photos : ['/static/img/field.jpg', '/static/img/gameroom.jpg', '/static/img/lounge.jpg'];
+  const photos = c.photos.length ? c.photos : ['/static/img/exterior-front.jpg', '/static/img/field.jpg', '/static/img/front-desk.jpg', '/static/img/courts.jpg', '/static/img/gameroom.jpg', '/static/img/lounge.jpg'];
   const abs = (p) => (/^https?:/.test(p) ? p : `${baseUrl}${p}`);
   const book = `${baseUrl}/book${es ? '?lang=es' : ''}`;
   const ld = [{
@@ -223,7 +223,7 @@ function landing(db, { lang = 'en', baseUrl, cfg = config }) {
   if (qs.length) ld.push({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) });
   const ldTag = ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, '\\u003c')}</script>`).join('\n');
   const body = `
-  <header class="seo-hero"><img src="${esc(photos[0])}" alt="${esc(es ? 'La cancha de NXGS' : `${loc.name} turf field`)}" width="1280" height="720">
+  <header class="seo-hero"><img src="${esc(photos[0])}" alt="${esc(es ? 'Next Generation Sports Complex' : `${loc.name} sports complex`)}" width="1280" height="720">
     <div><p class="eyebrow">${esc(cfg.business.name)} · ${esc(loc.shortName)}, NY</p><h1>${esc(headline)}</h1><p>${esc(intro)}</p>
     <p><a class="btn" href="${esc(book)}">${es ? 'Ver fechas y reservar' : 'See dates & book'}</a> <a class="btn ghost" href="${baseUrl}/calendar${es ? '?lang=es' : ''}">${es ? 'Calendario de disponibilidad' : 'Availability calendar'}</a></p></div></header>
   <section><h2>${es ? 'Paquetes de fiesta' : 'Party packages'}</h2><div class="seo-grid">

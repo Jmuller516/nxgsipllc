@@ -631,7 +631,7 @@ async function vendorDialog(id) {
   const prodRow = (p) => {
     const k = p ? p.id : 'new';
     return `<tr data-prow="${k}">
-      <td style="min-width:180px">${p ? `<img src="${esc(p.photo || '/static/img/addons/partner.svg')}" alt="" style="width:56px;height:42px;object-fit:cover;border-radius:6px;display:block;margin-bottom:4px"><label class="btn ghost small" style="display:inline-block;margin:0 0 4px">Photo<input type="file" accept="image/jpeg,image/png,image/webp" data-pphoto="${p.id}" hidden></label>` : ''}
+      <td style="min-width:180px">${p ? `${p.photo ? `<img src="${esc(p.photo)}" alt="" style="width:56px;height:42px;object-fit:cover;border-radius:6px;display:block;margin-bottom:4px">` : ''}<label class="btn ghost small" style="display:inline-block;margin:0 0 4px">Photo<input type="file" accept="image/jpeg,image/png,image/webp" data-pphoto="${p.id}" hidden></label>` : ''}
         <input data-k="name" value="${esc(p?.name || '')}" placeholder="Product name"><input data-k="detail" value="${esc(p?.detail || '')}" placeholder="Short description" style="margin-top:4px">
         <textarea data-k="includes" rows="2" placeholder="What's included (one per line)" style="margin-top:4px;font-size:.85rem">${esc(p?.includes || '')}</textarea></td>
       <td><input data-k="cost" type="number" step="0.01" min="0" value="${p ? (p.cost_cents / 100).toFixed(2) : ''}" style="min-width:80px"><br><select data-k="unit" style="margin-top:4px">${['each', 'dozen', 'set', 'party', 'hour'].map((u) => `<option ${p?.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select></td>
@@ -959,10 +959,10 @@ async function loadPricing() {
     PRICING.addOns.filter((a) => a.category === c.id).map((a) => `<tr>
       <td><input type="checkbox" data-g="addOns" data-id="${a.id}" data-f="active" ${a.active !== false ? 'checked' : ''}></td>
       <td class="name"><div style="display:flex;gap:10px;align-items:flex-start">
-        <img src="${esc(a.photo)}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none">
+        ${a.photo ? `<img src="${esc(a.photo)}" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none">` : ''}
         <div>${esc(a.name)}<br><span class="muted">${esc(a.unit)}${a.vendor ? ' · ' + esc(a.vendor) : ''}</span><br>
-          <label class="btn ghost small" style="display:inline-block;margin:4px 0 0;font-weight:600">${a.photo.startsWith('/media/') ? 'Change photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp" data-photo="${a.id}" hidden></label>
-          ${a.photo.startsWith('/media/') ? `<button class="btn ghost small" data-unphoto="${a.id}" style="margin-top:4px">Remove</button>` : ''}</div></div>
+          <label class="btn ghost small" style="display:inline-block;margin:4px 0 0;font-weight:600">${(a.photo || '').startsWith('/media/') ? 'Change photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp" data-photo="${a.id}" hidden></label>
+          ${(a.photo || '').startsWith('/media/') ? `<button class="btn ghost small" data-unphoto="${a.id}" style="margin-top:4px">Remove</button>` : ''}</div></div>
         <label style="font-size:.78rem;margin:6px 0 2px">What's included (one per line)</label>
         <textarea rows="3" data-g="addOns" data-id="${a.id}" data-f="includes" style="font-size:.85rem;min-width:200px">${esc(a.includes || '')}</textarea></td>
       <td><input type="number" step="0.01" min="0" data-g="addOns" data-id="${a.id}" data-f="priceCents" data-money value="${dollarsIn(a.priceCents)}"></td>
@@ -982,7 +982,7 @@ async function loadPricing() {
     } catch (e) { $('priceMsg').textContent = e.message; }
   });
   document.querySelectorAll('[data-unphoto]').forEach((b) => b.onclick = async () => {
-    await api(`/api/admin/addons/${b.dataset.unphoto}/photo`, 'DELETE'); await loadPricing(); $('priceMsg').textContent = 'Photo removed. The illustration shows again.';
+    await api(`/api/admin/addons/${b.dataset.unphoto}/photo`, 'DELETE'); await loadPricing(); $('priceMsg').textContent = 'Photo removed.';
   });
   document.querySelectorAll('#tab-pricing input:not([type=file]), #tab-pricing textarea').forEach((i) => i.oninput = i.onchange = () => onPriceEdit(i));
 }

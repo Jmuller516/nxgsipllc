@@ -209,7 +209,7 @@ async function init() {
     if (!items.length) return '';
     return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${escH(c.name)} <span class="muted" data-count="${c.id}"></span></summary>` +
       items.map((a) => `
-      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="${escH(a.name)}"><img src="${a.photo}" alt="${escH(a.name)}" loading="lazy"></button><div>${escH(a.name)}${a.detail ? `<small>${escH(a.detail)}</small>` : ''}${a.includes ? `<button type="button" class="incl-link" data-zoom="${a.id}">${t('whatsIncludedLink')}</button>` : ''}
+      <div class="addon" data-row="${a.id}">${a.photo ? `<button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="${escH(a.name)}"><img src="${a.photo}" alt="${escH(a.name)}" loading="lazy"></button>` : ''}<div>${escH(a.name)}${a.detail ? `<small>${escH(a.detail)}</small>` : ''}${a.includes ? `<button type="button" class="incl-link" data-zoom="${a.id}">${t('whatsIncludedLink')}</button>` : ''}
           <small><b>${money(a.priceCents)}</b> ${escH(unitText(a))}${a.minQty > 1 ? ` · ${t('min', a.minQty)}` : ''}${a.leadDays ? ` · ${t('orderAhead', a.leadDays >= 28 ? t('weeks', 4) : a.leadDays >= 14 ? t('weeks', 2) : t('daysN', a.leadDays))}` : ''}</small>
           <small class="lead-warn hidden"></small></div>
         <input type="number" min="0" max="${a.maxQty || 200}" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${escH(a.name)}"></div>`).join('') +
@@ -224,7 +224,7 @@ async function init() {
   // Tap a product photo to see it larger.
   document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => {
     const a = CFG.addOns.find((x) => x.id === b.dataset.zoom);
-    $('zoomImg').src = a.photo; $('zoomImg').alt = a.name;
+    $('zoomImg').classList.toggle('hidden', !a.photo); if (a.photo) { $('zoomImg').src = a.photo; $('zoomImg').alt = a.name; }
     $('zoomName').textContent = a.name;
     $('zoomDetail').textContent = [`${money(a.priceCents)} ${unitText(a)}`, a.minQty > 1 ? t('minimum', a.minQty) : '', a.maxQty === 1 ? t('onePerParty') : '', a.leadDays ? t('orderAhead', t('daysN', a.leadDays)) : ''].filter(Boolean).join(' · ');
     $('zoomIncl').innerHTML = incList(a.includes);
@@ -287,10 +287,11 @@ async function init() {
 
 // Real photos, video tour, FAQ and Instagram (managed in Admin → Website).
 function showSite(here) {
-  const photos = SITE?.photos?.length ? SITE.photos : null;
+  const real = !!SITE?.photos?.length;
+  const photos = real ? SITE.photos : ['exterior-front', 'exterior-aerial', 'exterior-entrance', 'exterior-closeup', 'exterior-lot', 'field', 'front-desk', 'courts', 'courts-wide', 'courts-2', 'gameroom', 'gameroom-2', 'lounge', 'lounge-2', 'cheer', 'training', 'training-2', 'yoga-room', 'pro-shop', 'bar-seating', 'concourse', 'office', 'restroom', 'field-2', 'lobby'].map((n) => `/static/img/${n}.jpg`);
   $('heroImg').alt = here.name;
-  $('heroCap').textContent = photos ? here.name : `${t('rendering')} · ${here.name}`;
-  if (photos) {
+  $('heroCap').textContent = real ? here.name : `${t('rendering')} · ${here.name}`;
+  {
     $('heroImg').src = photos[0];
     if (photos.length > 1) {
       $('thumbs').innerHTML = photos.map((p, i) => `<button type="button" aria-label="Photo ${i + 1}" data-photo="${escH(p)}"><img src="${escH(p)}" alt="" loading="lazy"></button>`).join('');

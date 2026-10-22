@@ -46,7 +46,7 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - Lead tracker: new → contacted → quoted → booked/lost, with follow-up dates
 - Reports: revenue by month, plus **vendor order totals** with estimated costs for upcoming parties
 - **What's included**: every package and add-on lists exactly what the customer gets, as bullet points on the package cards and behind a "What's included" link on each add-on. Edit the lists on the Pricing tab, one item per line. Riley uses the same lists when answering questions.
-- **Product photos**: every add-on shows a photo on the booking page, and customers can tap it to see it larger. Each item starts with an illustration. Upload the real product photo from the Pricing tab (**Add photo** on any item, right from your phone). Photos are resized automatically and kept when you reset prices.
+- **Product photos**: every add-on shows a photo on the booking page, and customers can tap it to see it larger. Items show no picture until you upload the real product photo from the Pricing tab (**Add photo** on any item, right from your phone). Photos are resized automatically and kept when you reset prices.
 - **Pricing tab**: change any price, cost, minimum, lead time, deposit %, balance due days or tax rate, and turn items on/off. No code changes needed, and add-on margins show as you type.
 - **Run sheet** (`/admin/runsheet`, or the button on any calendar day): one printable page per day with each party's host, schedule, theme, add-ons, shirt sizes, allergies in red, balance to collect, and a check-in list showing who still needs a waiver, plus that day's vendor deliveries.
 - **Host assignment** on every party.

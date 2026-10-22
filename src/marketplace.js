@@ -41,7 +41,7 @@ function createMarketplace(db, opts = {}) {
         id: `mp-${r.id}`, category: 'partners', name: r.name, detail: [r.detail, `by ${r.business_name}`].filter(Boolean).join(' · '),
         unit: r.unit || 'each', priceCents: priceFor(r, v), costCents: r.cost_cents, minQty: r.min_qty || 1, maxQty: r.max_qty || undefined,
         leadDays: r.lead_days || 0, vendor: r.business_name, vendorId: r.vendor_id, taxable: true, includes: r.includes || '',
-        photo: r.photo || '/static/img/addons/partner.svg', active: true, marketplace: true, productId: r.id,
+        photo: r.photo || '', active: true, marketplace: true, productId: r.id,
       });
     }
     return rows.length;
@@ -166,7 +166,7 @@ function createMarketplace(db, opts = {}) {
   function corporateCatalog() {
     return db.prepare(`SELECT p.*, v.business_name, v.markup_percent AS v_markup FROM vendor_products p JOIN vendors v ON v.id = p.vendor_id
       WHERE p.active = 1 AND v.status = 'approved' AND p.audience IN ('corporate','both') ORDER BY p.name`).all()
-      .map((r) => ({ id: r.id, name: r.name, detail: r.detail, vendor: r.business_name, unit: r.unit, priceCents: priceFor(r, { markup_percent: r.v_markup }), photo: r.photo || '/static/img/addons/partner.svg' }));
+      .map((r) => ({ id: r.id, name: r.name, detail: r.detail, vendor: r.business_name, unit: r.unit, priceCents: priceFor(r, { markup_percent: r.v_markup }), photo: r.photo || '' }));
   }
 
   // ---------- orders ----------

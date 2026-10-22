@@ -12,7 +12,6 @@ const pub = {};
 const images = {};
 for (const f of fs.readdirSync(path.join(root, 'public'), { withFileTypes: true })) if (f.isFile()) pub[f.name] = read(`public/${f.name}`);
 for (const f of fs.readdirSync(path.join(root, 'public', 'img')).filter((f) => f.endsWith('.jpg'))) images[`/static/img/${f}`] = `data:image/jpeg;base64,${fs.readFileSync(path.join(root, 'public', 'img', f)).toString('base64')}`;
-for (const f of fs.readdirSync(path.join(root, 'public', 'img', 'addons'))) images[`/static/img/addons/${f}`] = `data:image/svg+xml;base64,${fs.readFileSync(path.join(root, 'public', 'img', 'addons', f)).toString('base64')}`;
 
 // Safe to drop inside an HTML <script>: no "</script>", no raw line separators.
 const LS = String.fromCharCode(0x2028), PS = String.fromCharCode(0x2029);
