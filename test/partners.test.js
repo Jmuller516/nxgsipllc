@@ -35,6 +35,13 @@ async function start(at = '2026-11-01T15:00:00Z') {
   return { app, db, call, bookAndPay, sent, setNow: (iso) => { now = new Date(iso); }, close: () => server.close() };
 }
 
+test('Massapequa: Farmingdale weekend hours plus weekday parties', () => {
+  const c = require('../src/config');
+  const f = c.locations.find((l) => l.id === 'farmingdale').partyHours, m = c.locations.find((l) => l.id === 'massapequa').partyHours;
+  for (const d of [0, 5, 6]) assert.deepEqual(m[d], f[d]);
+  for (const d of [1, 2, 3, 4]) { assert.equal(f[d], null); assert.ok(m[d]); }
+});
+
 test('locations: Farmingdale is public, Massapequa is staff-only, calendars are separate', async () => {
   const t = await start();
   try {
@@ -53,8 +60,6 @@ test('locations: Farmingdale is public, Massapequa is staff-only, calendars are 
     assert.equal(t.app.svc.calendarMonth('2026-11', 'massapequa').days.find((d) => d.date === '2026-11-28').status, 'closed');
     assert.equal(t.app.svc.calendarMonth('2026-11', 'farmingdale').days.find((d) => d.date === '2026-11-28').status, 'open');
 
-    // Massapequa has no party hours until staff set them; give it weekend hours for this check.
-    require('../src/config').locations.find((l) => l.id === 'massapequa').partyHours = { 0: { open: '10:00', close: '19:00' }, 1: null, 2: null, 3: null, 4: null, 5: null, 6: { open: '10:00', close: '20:00' } };
     // Each location has its own capacity: two parties at noon in Farmingdale doesn't fill Massapequa
     const b = await t.bookAndPay(party);
     assert.equal(b.location_id, 'farmingdale');

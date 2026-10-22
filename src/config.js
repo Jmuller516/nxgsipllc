@@ -278,9 +278,10 @@ module.exports = {
   locations: [
     { id: 'farmingdale', name: 'NXGS Farmingdale', shortName: 'Farmingdale', address: '388 Broad Hollow Rd, Farmingdale, NY 11735', phone: null, public: true, entity: 'Next Generation Sports Complex LLC',
       partyHours: { 0: { open: '10:00', close: '19:00' }, 1: null, 2: null, 3: null, 4: null, 5: { open: '16:00', close: '21:00' }, 6: { open: '10:00', close: '20:00' } } },
-    // Massapequa's party hours aren't set yet (no party days until they are). Fill them in here or in Admin → Setup.
+    // Massapequa: same weekend hours as Farmingdale, plus weekday parties.
+    // Weekday times (Mon–Thu 4–9 PM) are a placeholder until confirmed.
     { id: 'massapequa', name: 'NXGS Massapequa', shortName: 'Massapequa', address: '400 Carman Mill Rd, Massapequa, NY 11758', phone: null, public: false, entity: 'NXGS2 LLC',
-      partyHours: { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null } },
+      partyHours: { 0: { open: '10:00', close: '19:00' }, 1: { open: '16:00', close: '21:00' }, 2: { open: '16:00', close: '21:00' }, 3: { open: '16:00', close: '21:00' }, 4: { open: '16:00', close: '21:00' }, 5: { open: '16:00', close: '21:00' }, 6: { open: '10:00', close: '20:00' } } },
   ],
   defaultLocation: 'farmingdale',
 
