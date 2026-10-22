@@ -17,28 +17,50 @@ const { createReviews } = require('./reviews');
 const media = require('./media');
 const { createSponsors } = require('./sponsors');
 const { createMarketplace } = require('./marketplace');
+const { createWaitlist } = require('./waitlist');
+const { createAudience } = require('./audience');
+const { createCheckin } = require('./checkin');
+const { createInsights } = require('./insights');
+const site = require('./site');
+const i18n = require('./i18n');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
 function createApp(db, opts = {}) {
+  site.applySetup(db);      // facility name, brand and locations from Admin → Setup
   priceSettings.apply(db); // admin price edits laid over config.js starting prices
-  const hooks = { onPayment: [], onLead: [], onExpire: [], onCancel: [] };
+  const hooks = { onPayment: [], onLead: [], onExpire: [], onCancel: [], onReschedule: [], onCustomerCancel: [], onVideo: [], onSlotOpened: [] };
   const svc = createService(db, config, opts.clock, hooks);
-  const guests = createGuests(db, svc, { clock: opts.clock });
+  const audience = createAudience(db, { clock: opts.clock });
+  const guests = createGuests(db, svc, { clock: opts.clock, audience });
   const sponsors = createSponsors(db, { clock: opts.clock });
-  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests, sponsors });
+  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests, sponsors, audience });
+  const waitlist = createWaitlist(db, svc, { clock: opts.clock, hooks: { onWaitlistOpen: [notifier.onWaitlistOpen] } });
+  const checkin = createCheckin(db, svc, guests, { clock: opts.clock });
+  const insights = createInsights(db, svc);
   const marketplace = createMarketplace(db, { hooks: { onVendorOrder: [notifier.onVendorOrder], onVendorApplied: [notifier.onVendorApplied] } });
   /** Rebuild the add-on list: starting prices + admin edits + live partner products. */
-  const refreshCatalog = () => { priceSettings.apply(db); marketplace.apply(config); };
+  const refreshCatalog = () => { site.applySetup(db); priceSettings.apply(db); marketplace.apply(config); };
   refreshCatalog();
   const qbo = createQuickBooks(db, { clock: opts.clock, fetch: opts.qboFetch });
   const gifts = createGifts(db, svc, { hooks: { onGiftActivated: [notifier.onGiftActivated], onReferralCredit: [notifier.onReferralCredit] } });
   const reviews = createReviews(db, svc, { clock: opts.clock });
-  hooks.onPayment.push(notifier.onPayment, qbo.onPayment, gifts.onPayment, marketplace.onPayment);
-  hooks.onCancel.push(marketplace.onCancel);
-  hooks.onExpire.push((id) => gifts.releaseHeld(id));
-  const assistant = createAssistant(db, svc, { clock: opts.clock, runner: opts.assistantRunner, fetch: opts.assistantFetch });
+  hooks.onPayment.push(notifier.onPayment, qbo.onPayment, gifts.onPayment, marketplace.onPayment, (b) => waitlist.onBooked(b));
+  // A time may have opened up: tell anyone on that day's waitlist.
+  const opened = (id) => { const b = svc.get(id); if (b) waitlist.slotOpened(b.party_date, b.location_id); };
+  hooks.onCancel.push(marketplace.onCancel, opened);
+  hooks.onExpire.push((id) => gifts.releaseHeld(id), opened);
+  hooks.onSlotOpened.push((date, loc) => waitlist.slotOpened(date, loc));
+  hooks.onVideo.push(notifier.onVideo);
+  hooks.onReschedule.push((b, info) => {
+    // Paid more than the new price: give the difference back as party credit.
+    let credit = null;
+    if (info.overpaidCents > 0) credit = gifts.createManual({ amount: info.overpaidCents / 100, recipientName: b.parent_name, recipientEmail: b.email, message: `Credit from moving party ${b.ref}` });
+    waitlist.slotOpened(info.fromDate, b.location_id);
+    notifier.onReschedule(b, { ...info, credit });
+  });
+  const assistant = createAssistant(db, svc, { clock: opts.clock, runner: opts.assistantRunner, fetch: opts.assistantFetch, waitlist });
   hooks.onLead.push(notifier.onLead);
 
   // Send queued emails / QuickBooks entries soon after something happens, without slowing the request.
@@ -68,8 +90,10 @@ function createApp(db, opts = {}) {
   const partyDaysFor = (id) => Object.entries(svc.locCfg(id).partyHours).filter(([, h]) => h).map(([d]) => Number(d));
 
   // ---------- Public API ----------
-  route('GET', '/api/config', () => ({
-    business: { name: config.business.name, website: config.business.website, address: config.business.address, phone: config.business.phone, email: config.business.email },
+  route('GET', '/api/config', ({ query }) => i18n.localizeConfig(publicConfig(), query.lang));
+  route('GET', '/api/site', ({ query }) => site.publicSite(db, i18n.lang(query.lang)));
+  const publicConfig = () => ({
+    business: { name: config.business.name, shortName: config.business.shortName, website: config.business.website, address: config.business.address, phone: config.business.phone, email: config.business.email },
     shirtSizes: config.details.shirtSizes,
     themes: config.themes,
     referral: config.referral,
@@ -91,7 +115,12 @@ function createApp(db, opts = {}) {
     defaultLocation: config.defaultLocation,
     stripe: stripe.enabled(),
     assistant: { enabled: assistant.enabled(), name: assistant.name() },
-  }));
+    compareRows: config.compareRows || [],
+    timePricing: (config.timePricing || []).filter((r) => r.active !== false && r.adjustCents).map(({ id, label, days, from, to, adjustCents }) => ({ id, label, days, from, to, adjustCents })),
+    changes: config.changes,
+    languages: config.languages || ['en'],
+    guestOffer: { programsText: config.guestOffer?.programsText || null },
+  });
 
   // Chat assistant. Works from our own pages and, via CORS, from the nxgs.net site.
   route('POST', '/api/chat', ({ body, req, baseUrl }) => assistant.chat({
@@ -104,7 +133,7 @@ function createApp(db, opts = {}) {
 
   route('GET', '/api/availability', ({ query }) => svc.availability(String(query.date || ''), publicLocationId(query.location), query.package || null));
 
-  route('POST', '/api/quote', ({ body }) => quoteWithCode(body));
+  route('POST', '/api/quote', ({ body }) => localizeQuote(quoteWithCode(body), body.lang));
 
   // Live availability calendar (public: open/full only, never who booked).
   route('GET', '/api/calendar', ({ query }) => svc.calendarMonth(String(query.month || ''), publicLocationId(query.location)));
@@ -112,6 +141,7 @@ function createApp(db, opts = {}) {
   route('POST', '/api/bookings', async ({ body, baseUrl }) => {
     quoteWithCode(body); // checks a gift card or referral code before anything is held
     const b = svc.create({ ...body, locationId: publicLocationId(body.locationId) });
+    if (body.marketingOptIn) audience.optIn({ email: b.email, name: b.parent_name, childName: b.child_name, phone: b.phone, source: 'booking', bookingId: b.id, lang: b.lang });
     const url = await checkoutForNewBooking(b, body.code, baseUrl);
     return { ref: b.ref, checkoutUrl: url };
   });
@@ -126,7 +156,33 @@ function createApp(db, opts = {}) {
         if (sess.client_reference_id === b.ref) { applyStripeSession(sess); b = svc.get(b.id); }
       } catch (e) { console.error(e); }
     }
-    return customerView(b);
+    return customerView(b, query.lang);
+  });
+  // Families moving or cancelling their own party.
+  route('GET', '/api/bookings/:ref/times', ({ params, query }) => {
+    const b = authorizedBooking(params.ref, query.t);
+    const c = svc.canReschedule(b);
+    if (!c.ok) throw new BookingError(c.reason);
+    return svc.rescheduleTimes(b.id, String(query.date || ''));
+  });
+  route('POST', '/api/bookings/:ref/reschedule', ({ params, query, body }) => {
+    const b = authorizedBooking(params.ref, query.t);
+    svc.reschedule(b.id, { date: String(body.date || ''), time: String(body.time || '') });
+    return customerView(svc.get(b.id), body.lang);
+  });
+  route('POST', '/api/bookings/:ref/cancel', async ({ params, query, body }) => {
+    const b = authorizedBooking(params.ref, query.t);
+    if (String(body.confirm || '').toUpperCase() !== 'CANCEL') throw new BookingError('Type CANCEL to confirm.');
+    const terms = svc.cancelTerms(b);
+    const done = svc.customerCancel(b.id, body.reason);
+    const refundedCents = await refundToCard(done, terms.refundCents);
+    notifier.onCustomerCancel(svc.get(b.id), terms, { refundedCents });
+    return customerView(svc.get(b.id), body.lang);
+  });
+  route('POST', '/api/bookings/:ref/lang', ({ params, query, body }) => {
+    const b = authorizedBooking(params.ref, query.t);
+    db.prepare('UPDATE bookings SET lang = ? WHERE id = ?').run(i18n.lang(body.lang), b.id);
+    return { ok: true };
   });
   route('POST', '/api/bookings/:ref/details', ({ params, query, body }) => {
     const b = authorizedBooking(params.ref, query.t);
@@ -137,12 +193,12 @@ function createApp(db, opts = {}) {
       if (b.details?.photo) media.remove(db, b.details.photo);
     }
     svc.saveDetails(b.id, input);
-    return customerView(svc.get(b.id));
+    return customerView(svc.get(b.id), body.lang);
   });
   route('POST', '/api/bookings/:ref/gift-card', ({ params, query, body }) => {
     const b = authorizedBooking(params.ref, query.t);
     const r = gifts.applyToBalance(b.id, body.code);
-    return { ...r, booking: customerView(svc.get(b.id)) };
+    return { ...r, booking: customerView(svc.get(b.id), body.lang) };
   });
   route('POST', '/api/bookings/:ref/review', ({ params, query, body }) => {
     const b = authorizedBooking(params.ref, query.t);
@@ -151,8 +207,18 @@ function createApp(db, opts = {}) {
 
   // Invitations, RSVPs and waivers
   route('GET', '/api/invite/:token', ({ params }) => guests.invitation(params.token) || (() => { throw notFound(); })());
-  route('POST', '/api/invite/:token/rsvp', ({ params, body }) => guests.rsvp(params.token, body));
-  route('GET', '/api/waiver', () => guests.waiverText());
+  route('POST', '/api/invite/:token/rsvp', ({ params, body }) => {
+    const r = guests.rsvp(params.token, body);
+    return { ...r, checkinPass: r.attending === 'yes' ? checkin.passForRsvp(r.rsvpToken) : null };
+  });
+  route('GET', '/api/invite/:token/pass', ({ params, query }) => {
+    const b = svc.getByInvite(params.token);
+    const r = b && db.prepare(`SELECT token FROM rsvps WHERE token = ? AND booking_id = ? AND attending = 'yes'`).get(String(query.r || ''), b.id);
+    if (!r) throw notFound();
+    return { checkinPass: checkin.passForRsvp(r.token) };
+  });
+  route('GET', '/api/waiver', ({ query }) => guests.waiverText(i18n.lang(query.lang)));
+  route('POST', '/api/waitlist', ({ body }) => waitlist.join({ ...body, locationId: publicLocationId(body.locationId) }));
   route('POST', '/api/waivers', ({ body, req }) => guests.signWaiver(body, { ip: clientIp(req), userAgent: req.headers['user-agent'] }));
 
   // Gift cards
@@ -219,21 +285,63 @@ function createApp(db, opts = {}) {
   route('GET', '/api/admin/bookings/:id', ({ params }) => {
     const b = svc.get(Number(params.id));
     if (!b) throw notFound();
-    return { ...adminView(b), payments: svc.payments(b.id), detailsStatus: svc.detailsStatus(b), guests: guests.partyGuests(b.id), review: reviews.forBooking(b.id) };
+    return { ...adminView(b), payments: svc.payments(b.id), detailsStatus: svc.detailsStatus(b), guests: guests.partyGuests(b.id), review: reviews.forBooking(b.id),
+      checkin: ['confirmed', 'paid'].includes(b.status) ? { arrived: checkin.roster(b.id).arrived } : null };
   }, { admin: true });
   route('PATCH', '/api/admin/bookings/:id', ({ params, body }) => {
     const b = svc.get(Number(params.id));
     if (!b) throw notFound();
     if (body.hostName !== undefined) svc.setHost(b.id, body.hostName);
+    if (body.videoUrl !== undefined) svc.setVideo(b.id, body.videoUrl);
     return adminView(svc.get(b.id));
   }, { admin: true });
   route('GET', '/api/admin/runsheet', ({ query }) => runSheet(String(query.date || ''), query.location || null), { admin: true });
+  route('POST', '/api/admin/bookings/:id/reschedule', ({ params, body }) => adminView(svc.reschedule(Number(params.id), { date: String(body.date || ''), time: String(body.time || '') }, { staff: true }).booking), { admin: true });
+  route('GET', '/api/admin/bookings/:id/times', ({ params, query }) => svc.rescheduleTimes(Number(params.id), String(query.date || '')), { admin: true });
+  route('POST', '/api/admin/bookings/:id/refunded', ({ params, body }) => {
+    const amountCents = Math.round(Number(body.amount) * 100);
+    return adminView(svc.recordRefund(Number(params.id), { amountCents, method: ['cash', 'check', 'card_in_person', 'gift_card', 'stripe'].includes(body.method) ? body.method : 'manual', note: body.note }));
+  }, { admin: true });
+
+  // Insights, waitlist and the marketing list
+  route('GET', '/api/admin/insights', ({ query }) => insights.report({ from: query.from, to: query.to, locationId: query.location || null }), { admin: true });
+  route('GET', '/api/admin/growth', () => ({ waitlist: waitlist.list(), waitlistStats: waitlist.stats(), audience: audience.stats(), contacts: audience.list().slice(0, 300),
+    recovery: { sent: db.prepare("SELECT COUNT(*) n FROM emails WHERE kind = 'hold_recovery'").get().n, booked: db.prepare("SELECT COUNT(*) n FROM bookings WHERE source = 'recovery' AND status IN ('confirmed','paid')").get().n } }), { admin: true });
+  route('DELETE', '/api/admin/waitlist/:id', ({ params }) => { waitlist.remove(Number(params.id)); return { ok: true }; }, { admin: true });
+  route('GET', '/api/admin/export/contacts.csv', () => csv(['Email', 'Name', 'Child', 'Phone', 'Language', 'From', 'Party', 'Opted in'],
+    audience.list().filter((c) => !c.unsubscribed_at).map((c) => [c.email, c.name, c.child_name, c.phone, c.lang, c.source, c.ref ? `${c.ref} (${c.party_date})` : '', c.opted_in_at.slice(0, 10)])), { admin: true });
+
+  // Door check-in
+  route('GET', '/api/admin/checkin', ({ query }) => ({ date: String(query.date || svc.todayLocal()), parties: checkin.partiesOn(String(query.date || svc.todayLocal()), svc.location(query.location).id) }), { admin: true });
+  route('GET', '/api/admin/checkin/:id', ({ params }) => checkin.roster(Number(params.id)), { admin: true });
+  route('POST', '/api/admin/checkin/:id', ({ params, body }) => checkin.checkIn(Number(params.id), body.name, 'tap'), { admin: true });
+  route('DELETE', '/api/admin/checkin/:id/:key', ({ params }) => checkin.undo(Number(params.id), params.key), { admin: true });
+
+  // Website content (photos, video tour, FAQ, Instagram, search page) and facility setup
+  route('GET', '/api/admin/site', () => ({ ...site.content(db), faq: site.faq(db, 'en', { includeDrafts: true }) }), { admin: true });
+  route('PUT', '/api/admin/site', ({ body }) => { site.saveContent(db, body); return { ...site.content(db), faq: site.faq(db, 'en', { includeDrafts: true }) }; }, { admin: true });
+  route('POST', '/api/admin/site/photo', ({ body }) => {
+    let p;
+    try { p = media.saveDataUrl(db, body.dataUrl, { maxBytes: 2_500_000 }); } catch (e) { throw new BookingError(e.message); }
+    site.addPhoto(db, p);
+    return { ...site.content(db), faq: site.faq(db, 'en', { includeDrafts: true }) };
+  }, { admin: true });
+  route('GET', '/api/admin/seo-snippet', ({ baseUrl }) => { const p = site.landing(db, { lang: 'en', baseUrl }); return { body: p.body, jsonLd: p.jsonLd, url: `${baseUrl}/birthday-parties` }; }, { admin: true });
+  route('GET', '/api/admin/setup', () => ({ ...site.setupView(db), status: launchStatus() }), { admin: true });
+  route('PUT', '/api/admin/setup', ({ body }) => { site.saveSetup(db, body); refreshCatalog(); return { ...site.setupView(db), status: launchStatus() }; }, { admin: true });
+  route('POST', '/api/admin/setup/logo', ({ body }) => {
+    let p;
+    try { p = media.saveDataUrl(db, body.dataUrl, { label: 'logo' }); } catch (e) { throw new BookingError(e.message); }
+    site.saveSetup(db, { brand: { ...config.brand, logoUrl: p } });
+    return { ...site.setupView(db), status: launchStatus() };
+  }, { admin: true });
 
   // Waivers
   route('GET', '/api/admin/waivers', ({ query }) => guests.searchWaivers(String(query.q || '')), { admin: true });
   route('GET', '/api/admin/waivers/:id', ({ params }) => guests.getWaiver(Number(params.id)) || (() => { throw notFound(); })(), { admin: true });
   route('GET', '/api/admin/waiver-text', () => guests.waiverText(), { admin: true });
-  route('PUT', '/api/admin/waiver-text', ({ body }) => guests.setWaiverText(body.text), { admin: true });
+  route('PUT', '/api/admin/waiver-text', ({ body }) => guests.setWaiverText(body.text, body.lang === 'es' ? 'es' : 'en'), { admin: true });
+  route('GET', '/api/admin/waiver-text-es', () => ({ text: guests.spanishWaiver() }), { admin: true });
 
   // Gift cards & referral credits
   route('GET', '/api/admin/gift-cards', () => gifts.list(), { admin: true });
@@ -361,6 +469,54 @@ function createApp(db, opts = {}) {
       .map((p) => [p.created_at.slice(0, 10), p.ref, p.parent_name, p.email, p.kind, p.method, dollars(p.amount_cents), p.party_date, p.stripe_payment_intent])), { admin: true });
 
   // ---------- Helpers ----------
+  /** Quote line names and notes in the customer's language. */
+  function localizeQuote(q, lang) {
+    const L = i18n.lang(lang);
+    if (L === 'en') return q;
+    return { ...q, packageName: i18n.packageText({ id: q.packageId, name: q.packageName }, L).name, lines: q.lines.map((l) => ({ ...l, name: i18n.lineName(l, L) })),
+      notes: (q.notes || []).map((n) => i18n.noteText(n, L)), phases: (q.phases || []).map((p) => ({ ...p, label: i18n.phaseLabel(p.label, L) })) };
+  }
+
+  /** Send a family's refund back to their card, newest card payment first. Returns what was refunded. */
+  async function refundToCard(b, cents) {
+    if (!stripe.enabled() || cents <= 0) return 0;
+    let left = cents, done = 0;
+    const cardPays = svc.payments(b.id).filter((p) => p.method === 'stripe' && p.amount_cents > 0 && p.stripe_payment_intent).reverse();
+    for (const p of cardPays) {
+      if (left <= 0) break;
+      const already = -db.prepare(`SELECT COALESCE(SUM(amount_cents),0) s FROM payments WHERE kind = 'refund' AND stripe_payment_intent = ?`).get(p.stripe_payment_intent).s;
+      const amt = Math.min(left, p.amount_cents - already);
+      if (amt <= 0) continue;
+      try {
+        await stripe.refund({ paymentIntent: p.stripe_payment_intent, amountCents: amt });
+        svc.recordRefund(b.id, { amountCents: amt, method: 'stripe', paymentIntent: p.stripe_payment_intent, note: 'Refunded automatically after the family cancelled' });
+        left -= amt; done += amt;
+      } catch (e) { console.error('Stripe refund failed:', e.message); break; }
+    }
+    return done;
+  }
+
+  /** The launch checklist on Admin → Setup. */
+  function launchStatus() {
+    const has = (k) => !!db.prepare('SELECT 1 FROM settings WHERE key = ?').get(k);
+    const c = site.content(db);
+    const drafts = site.faq(db, 'en', { includeDrafts: true }).filter((f) => f.draft).length;
+    return [
+      { key: 'business', label: 'Facility name, address and phone', ok: !!(config.business.name && config.business.address && config.business.phone), note: config.business.phone ? '' : 'Add the front desk phone number.' },
+      { key: 'brand', label: 'Logo and colors', ok: !!config.brand.logoUrl, note: config.brand.logoUrl ? '' : 'Upload your logo.' },
+      { key: 'waiver', label: 'Your attorney-approved waiver', ok: !guests.waiverText().isSample, note: 'Replace the sample text under Settings.' },
+      { key: 'prices', label: 'Prices reviewed', ok: has('price_overrides'), note: 'Confirm package and add-on prices on the Pricing tab.' },
+      { key: 'stripe', label: 'Card payments (Stripe)', ok: stripe.enabled(), note: 'Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.' },
+      { key: 'email', label: 'Emails (Resend)', ok: notifier.enabled, note: 'Set RESEND_API_KEY and verify your sending domain.' },
+      { key: 'sms', label: 'Text messages (Twilio)', ok: notifier.smsEnabled, note: 'Set the Twilio keys and finish A2P registration.' },
+      { key: 'assistant', label: 'Chat assistant', ok: assistant.enabled(), note: 'Set ANTHROPIC_API_KEY.' },
+      { key: 'quickbooks', label: 'QuickBooks', ok: qbo.connected(), note: 'Connect from Settings.' },
+      { key: 'photos', label: 'Real photos of the facility', ok: c.photos.length > 0, note: 'Upload photos on the Website tab (renderings show until then).' },
+      { key: 'faq', label: 'FAQ answers', ok: drafts === 0, note: drafts ? `${drafts} question${drafts > 1 ? 's need' : ' needs'} your answer on the Website tab.` : '' },
+      { key: 'reviews', label: 'Google review link', ok: !!config.reviews.googleReviewUrl, note: 'Add your Google "write a review" link in src/config.js (reviews.googleReviewUrl).' },
+    ];
+  }
+
   /** Quote, plus what a gift card would cover today. Throws for an unknown code. */
   function quoteWithCode(input) {
     const q = svc.quoteFor(input);
@@ -414,17 +570,27 @@ function createApp(db, opts = {}) {
   }
 
   /** What the customer's own booking page shows. */
-  function customerView(b) {
+  function customerView(b, lang) {
+    const L = i18n.lang(lang || b.lang);
     const g = guests.partyGuests(b.id);
     const review = reviews.forBooking(b.id);
+    const st = svc.detailsStatus(b);
+    const active = ['confirmed', 'paid'].includes(b.status);
     return {
-      ref: b.ref, status: b.status, partyDate: b.party_date, timeLabel: b.timeLabel, endLabel: b.endLabel, schedule: b.schedule,
-      packageId: b.package_id, packageName: b.packageName, kids: b.kids, childName: b.child_name, childAge: b.child_age, location: b.location,
+      lang: L,
+      ref: b.ref, status: b.status, partyDate: b.party_date, timeLabel: b.timeLabel, endLabel: b.endLabel, schedule: b.schedule.map((s) => ({ ...s, label: i18n.phaseLabel(s.label, L) })),
+      packageId: b.package_id, packageName: i18n.packageText({ id: b.package_id, name: b.packageName }, L).name, kids: b.kids, childName: b.child_name, childAge: b.child_age, location: b.location,
       parentFirstName: String(b.parent_name || '').split(' ')[0], email: b.email,
-      theme: b.theme, themeInfo: b.themeInfo, details: b.details, detailsStatus: svc.detailsStatus(b),
-      quote: { lines: b.quote.lines.map(({ costCents, vendor, ...l }) => l), subtotalCents: b.quote.subtotalCents, taxCents: b.quote.taxCents },
+      theme: b.theme, themeInfo: b.themeInfo ? { ...b.themeInfo, name: i18n.themeName(b.themeInfo, L) } : null, details: b.details,
+      detailsStatus: { ...st, missing: st.missing.map((m) => i18n.missingText(m, L)) },
+      quote: { lines: b.quote.lines.map(({ costCents, vendor, ...l }) => ({ ...l, name: i18n.lineName(l, L) })), subtotalCents: b.quote.subtotalCents, taxCents: b.quote.taxCents },
+      videoUrl: b.video_url || null,
+      changes: active ? { reschedule: svc.canReschedule(b), cancel: svc.cancelTerms(b), policy: config.changes } : null,
+      refundDueCents: b.refund_due_cents || 0,
+      checkinPass: active && b.child_name ? checkin.passForBooking(b.id) : null,
       totalCents: b.total_cents, paidCents: b.paid_cents, balanceCents: b.balanceCents, balanceDueDate: b.balance_due_date,
       payments: svc.payments(b.id).map((x) => ({ date: x.created_at.slice(0, 10), kind: x.kind, method: x.method, amountCents: x.amount_cents })),
+      locationId: b.location_id,
       inviteToken: ['confirmed', 'paid'].includes(b.status) ? b.invite_token : null,
       referralCode: ['confirmed', 'paid'].includes(b.status) ? b.referral_code : null,
       guests: g,
@@ -446,7 +612,7 @@ function createApp(db, opts = {}) {
         theme: b.themeInfo, packageName: b.packageName, kids: b.kids, balanceCents: b.balanceCents,
         addOns: b.quote.lines.filter((l) => l.kind === 'addon').map((l) => ({ name: l.name, qty: l.qty, vendor: l.vendor })),
         details: b.details, missingDetails: st.missing, notes: b.notes,
-        guests: g,
+        guests: g, arrived: ['confirmed', 'paid'].includes(b.status) ? checkin.roster(b.id).arrived : 0,
       };
     });
     const deliveries = {};
@@ -544,6 +710,34 @@ function createApp(db, opts = {}) {
     return { redirect: `${baseUrl}/gift-cards?code=${encodeURIComponent(card.code)}` };
   }
 
+  function scanPage(code) {
+    let r;
+    try { r = checkin.scan(code); } catch (e) {
+      return html(layout('Check-in', `<div class="card" style="border:3px solid var(--bad)"><h1 style="color:var(--bad)">Not checked in</h1><p>${esc(e.message)}</p><p><a class="btn ghost" href="/admin/checkin">Open check-in</a></p></div>`));
+    }
+    const p = r.person || {};
+    const ok = p.waiver;
+    return html(layout('Checked in', `<div class="card" style="border:3px solid ${ok ? 'var(--ok)' : 'var(--warn)'}">
+      <p class="eyebrow">${esc(r.roster.booking.child ? `${r.roster.booking.child}'s party` : 'Party')} · ${esc(r.roster.booking.timeLabel)}</p>
+      <h1 style="margin:4px 0;color:${ok ? 'var(--ok)' : 'var(--warn)'}">✓ ${esc(r.name)} is checked in</h1>
+      ${r.wrongDay ? `<p class="banner">Heads up: this party is on ${esc(fmtDate(r.wrongDay))}, not today.</p>` : ''}
+      <p style="font-size:1.2rem">${ok ? '✅ Waiver on file' : '⚠️ <b>No waiver yet.</b> Have a parent sign at the desk before they play.'}</p>
+      ${p.allergies ? `<p class="error" style="font-size:1.1rem">Allergies: ${esc(p.allergies)}</p>` : ''}
+      <p>${r.roster.arrived} of ${r.roster.expected} expected guests are here.</p>
+      <div class="actions"><a class="btn" href="/admin/checkin?party=${r.roster.booking.id}">Open guest list</a>${ok ? '' : ` <a class="btn ghost" href="/waiver?party=${esc(r.roster.booking.inviteToken)}&child=${encodeURIComponent(r.name)}">Sign waiver now</a>`}</div></div>`));
+  }
+
+  function unsubscribePage(q, confirm) {
+    const email = String(q.e || '').toLowerCase();
+    if (!email || !audience.validKey(email, q.k)) return html(layout('Unsubscribe', '<div class="card"><h1>Link not valid</h1><p>Please use the link from the email, or reply to the email and we\'ll take you off the list.</p></div>'));
+    if (confirm) {
+      audience.unsubscribe(email);
+      return html(layout('Unsubscribed', `<div class="card"><h1>You're unsubscribed</h1><p>${esc(email)} won't get offers from ${esc(config.business.name)} anymore. Emails about a party you booked still come through.</p><p class="muted">Ya no recibirá ofertas. Los correos de una fiesta que reservó seguirán llegando.</p></div>`));
+    }
+    return html(layout('Unsubscribe', `<div class="card"><h1>Unsubscribe?</h1><p>Stop sending offers to <b>${esc(email)}</b>.</p>
+      <form method="post" action="/unsubscribe?e=${encodeURIComponent(email)}&k=${encodeURIComponent(q.k)}"><button class="btn">Unsubscribe · Cancelar suscripción</button></form></div>`));
+  }
+
   /** Serve a page with a value filled in (so it works the same in the clickable preview). */
   function sendPage(res, file, values) {
     let page = fs.readFileSync(path.join(PUBLIC_DIR, file), 'utf8');
@@ -577,7 +771,8 @@ function createApp(db, opts = {}) {
       }
 
       // Pages
-      if (req.method === 'GET' && (pathname === '/' || pathname === '/book')) return sendFile(res, 'book.html', { embeddable: true });
+      if (req.method === 'GET' && (pathname === '/' || pathname === '/home')) return sendFile(res, 'home.html', { embeddable: true });
+      if (req.method === 'GET' && pathname === '/book') return sendFile(res, 'book.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/calendar') return sendFile(res, 'calendar.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/chat') return sendFile(res, 'chat.html', { embeddable: true });
       const feed = /^\/feeds\/([^/]+)\/parties\.ics$/.exec(pathname);
@@ -605,6 +800,26 @@ function createApp(db, opts = {}) {
       if (req.method === 'GET' && pathname === '/admin/runsheet') {
         if (!adminOk(req)) return askForLogin(res);
         return sendFile(res, 'runsheet.html');
+      }
+      if (req.method === 'GET' && (pathname === '/admin/checkin' || pathname === '/admin/timer')) {
+        if (!adminOk(req)) return askForLogin(res);
+        return sendFile(res, pathname === '/admin/checkin' ? 'checkin.html' : 'timer.html');
+      }
+      // Scanning a guest's check-in pass with a phone camera lands here (staff must be logged in).
+      const cm = /^\/c\/([rb]\d+\.[a-f0-9]+)$/.exec(pathname);
+      if (req.method === 'GET' && cm) {
+        if (!adminOk(req)) return askForLogin(res);
+        return send(res, scanPage(cm[1]));
+      }
+      // Search-friendly birthday party pages, sitemap and robots.txt
+      if (req.method === 'GET' && (pathname === '/birthday-parties' || pathname === '/fiestas-de-cumpleanos')) {
+        return send(res, html(site.landing(db, { lang: pathname === '/birthday-parties' ? 'en' : 'es', baseUrl }).html));
+      }
+      if (req.method === 'GET' && pathname === '/sitemap.xml') { res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' }); return res.end(site.sitemap(baseUrl)); }
+      if (req.method === 'GET' && pathname === '/robots.txt') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end(site.robots(baseUrl)); }
+      if (pathname === '/unsubscribe') {
+        const q = Object.fromEntries(url.searchParams);
+        return send(res, unsubscribePage(q, req.method === 'POST'));
       }
       if (pathname === '/pay/demo') {
         const ctx = { query: Object.fromEntries(url.searchParams), baseUrl };
@@ -714,7 +929,7 @@ function createApp(db, opts = {}) {
     return lines.map((l) => { let out = ''; let rest = l; while (Buffer.byteLength(rest) > 74) { let cut = 74; while (Buffer.byteLength(rest.slice(0, cut)) > 74) cut--; out += rest.slice(0, cut) + '\r\n '; rest = rest.slice(cut); } return out + rest; }).join('\r\n') + '\r\n';
   }
 
-  return { handle, svc, notifier, qbo, assistant, guests, gifts, reviews, sponsors, marketplace, refreshCatalog, background, icsFeed, feedToken, runSheet };
+  return { handle, svc, notifier, qbo, assistant, guests, gifts, reviews, sponsors, marketplace, waitlist, audience, checkin, insights, refreshCatalog, background, icsFeed, feedToken, runSheet, launchStatus };
 }
 
 // Brand colors & fonts from config.brand, loaded after style.css.

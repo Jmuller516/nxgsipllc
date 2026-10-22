@@ -70,4 +70,9 @@ function verifyWebhook(rawBody, header, secret = process.env.STRIPE_WEBHOOK_SECR
   return JSON.parse(rawBody);
 }
 
-module.exports = { enabled, encode, createCheckout, getCheckout, verifyWebhook };
+/** Refund part or all of a card payment. */
+function refund({ paymentIntent, amountCents, reason = 'requested_by_customer' }) {
+  return call('POST', '/refunds', { payment_intent: paymentIntent, amount: amountCents, reason });
+}
+
+module.exports = { enabled, encode, createCheckout, getCheckout, verifyWebhook, refund };

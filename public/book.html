@@ -9,84 +9,97 @@
 </head>
 <body>
 <main>
-  <img id="logo" class="page-logo hidden" alt="">
-  <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
-  <figure class="hero">
-    <img src="/static/img/field.jpg" alt="The main turf field at NXGS Farmingdale, with stadium seating and lit signage" width="1280" height="720">
-    <figcaption>Rendering · NXGS Farmingdale</figcaption>
+  <div class="topline"><img id="logo" class="page-logo hidden" alt=""><span id="langBox"></span></div>
+  <p class="eyebrow" id="bizName"></p>
+  <figure class="hero" id="hero">
+    <img id="heroImg" src="/static/img/field.jpg" alt="" width="1280" height="720">
+    <figcaption id="heroCap"></figcaption>
+    <button type="button" class="tour-btn hidden" id="tourBtn" data-i18n="tourBtn"></button>
   </figure>
-  <h1>Book your event</h1>
+  <div class="thumbs hidden" id="thumbs"></div>
+  <h1 data-i18n="bookTitle"></h1>
   <div id="locBox"></div>
   <div id="sponsorBox"></div>
-  <p class="muted"><a href="/calendar" id="calLink">See the availability calendar →</a></p>
-  <p id="demoBanner" class="banner hidden">Demo mode: payments are simulated until Stripe is connected.</p>
-  <p id="cancelBanner" class="banner hidden">Payment was cancelled. Your time is held briefly; you can try again below.</p>
+  <p class="muted"><a href="/calendar" id="calLink" data-i18n="seeCalendar"></a></p>
+  <p id="demoBanner" class="banner hidden" data-i18n="demoBanner"></p>
+  <p id="cancelBanner" class="banner hidden" data-i18n="cancelBanner"></p>
 
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" aria-selected="true" data-tab="party">Kids birthday party</button>
-    <button class="tab" role="tab" aria-selected="false" data-tab="inquiry">Group &amp; corporate</button>
+    <button class="tab" role="tab" aria-selected="true" data-tab="party" data-i18n="tabParty"></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="inquiry" data-i18n="tabGroup"></button>
   </div>
 
   <!-- ============ KIDS PARTY ============ -->
   <form id="partyForm" novalidate>
     <div class="card">
-      <h2 style="margin-top:0">How the party goes <span class="muted" id="partyLen"></span></h2>
+      <h2 style="margin-top:0"><span data-i18n="howItGoes"></span> <span class="muted" id="partyLen"></span></h2>
       <div class="phases" id="phaseStrip">
-        <figure><img src="/static/img/field.jpg" alt="Turf field" loading="lazy"><figcaption><b data-ph="play"></b> <span data-phl="play">Field play</span></figcaption></figure>
-        <figure><img src="/static/img/gameroom.jpg" alt="Video game room" loading="lazy"><figcaption><b data-ph="gameRoom"></b> <span data-phl="gameRoom">Video game room</span></figcaption></figure>
-        <figure><img src="/static/img/lounge.jpg" alt="Party lounge" loading="lazy"><figcaption><b data-ph="food"></b> <span data-phl="food">Food &amp; cake</span></figcaption></figure>
+        <figure><img src="/static/img/field.jpg" alt="" loading="lazy"><figcaption><b data-ph="play"></b> <span data-phl="play"></span></figcaption></figure>
+        <figure><img src="/static/img/gameroom.jpg" alt="" loading="lazy"><figcaption><b data-ph="gameRoom"></b> <span data-phl="gameRoom"></span></figcaption></figure>
+        <figure><img src="/static/img/lounge.jpg" alt="" loading="lazy"><figcaption><b data-ph="food"></b> <span data-phl="food"></span></figcaption></figure>
       </div>
-      <h2>1. Choose a package</h2>
+      <h2 data-i18n="step1"></h2>
+      <details class="compare" id="compareBox"><summary data-i18n="comparePackages"></summary><div class="scroll"><table class="compare-table" id="compare"></table></div></details>
       <div class="packages" id="packages"></div>
-      <label for="kids">How many kids?</label>
+      <label for="kids" data-i18n="howManyKids"></label>
       <input id="kids" name="kids" type="number" min="1" value="15" inputmode="numeric">
       <p class="muted" id="kidsHint"></p>
-      <label for="theme">Sport theme <span class="muted">(you can change it later)</span></label>
-      <select id="theme"><option value="">Choose later</option></select>
+      <label for="theme"><span data-i18n="themeLabel"></span> <span class="muted" data-i18n="themeLater"></span></label>
+      <select id="theme"><option value="" data-i18n="chooseLater"></option></select>
     </div>
 
     <div class="card">
-      <h2 style="margin-top:0">2. Pick a date &amp; time</h2>
-      <label for="date">Party date</label>
+      <h2 style="margin-top:0" data-i18n="step2"></h2>
+      <label for="date" data-i18n="partyDate"></label>
       <input id="date" name="date" type="date">
       <p class="muted" id="daysHint"></p>
       <div id="slotsWrap" class="hidden">
-        <label>Start time <span class="muted" id="lengthHint"></span></label>
+        <label><span data-i18n="startTime"></span> <span class="muted" id="lengthHint"></span></label>
         <div class="slots" id="slots"></div>
       </div>
       <p class="muted" id="slotsMsg"></p>
+      <details class="waitbox hidden" id="waitBox"><summary id="waitSummary"></summary>
+        <p class="muted" id="waitIntro"></p>
+        <div class="row"><div><label for="wName" data-i18n="yourName"></label><input id="wName" autocomplete="name"></div><div><label for="wEmail" data-i18n="email"></label><input id="wEmail" type="email" autocomplete="email"></div></div>
+        <label for="wPhone"><span data-i18n="phone"></span> <span class="muted" data-i18n="optional"></span></label><input id="wPhone" type="tel" autocomplete="tel">
+        <label class="check"><input type="checkbox" id="wSms"> <span data-i18n="waitSms"></span></label>
+        <div id="wMsg" class="hidden"></div>
+        <div class="actions"><button class="btn ghost" type="button" id="wJoin" data-i18n="waitJoin"></button></div>
+      </details>
     </div>
 
     <div class="card">
-      <h2 style="margin-top:0">3. Extras <span class="muted">(optional)</span></h2>
+      <h2 style="margin-top:0"><span data-i18n="step3"></span> <span class="muted" data-i18n="optional"></span></h2>
       <div id="addons"></div>
     </div>
 
     <div class="card">
-      <h2 style="margin-top:0">4. Your details</h2>
+      <h2 style="margin-top:0" data-i18n="step4"></h2>
       <div class="row">
-        <div><label for="childName">Birthday child's name</label><input id="childName" autocomplete="off"></div>
-        <div><label for="childAge">Turning</label><input id="childAge" type="number" min="1" max="18" inputmode="numeric"></div>
+        <div><label for="childName" data-i18n="childName"></label><input id="childName" autocomplete="off"></div>
+        <div><label for="childAge" data-i18n="turning"></label><input id="childAge" type="number" min="1" max="18" inputmode="numeric"></div>
       </div>
-      <label for="parentName">Your name</label><input id="parentName" autocomplete="name" required>
+      <label for="parentName" data-i18n="yourName"></label><input id="parentName" autocomplete="name" required>
       <div class="row">
-        <div><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
-        <div><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" required></div>
+        <div><label for="email" data-i18n="email"></label><input id="email" type="email" autocomplete="email" required></div>
+        <div><label for="phone" data-i18n="phone"></label><input id="phone" type="tel" autocomplete="tel" required></div>
       </div>
-      <label for="notes">Anything we should know? <span class="muted">(allergies, theme…)</span></label>
+      <label for="notes"><span data-i18n="anything"></span> <span class="muted" data-i18n="anythingHint"></span></label>
       <textarea id="notes" rows="3"></textarea>
-      <label class="check"><input type="checkbox" id="smsOptIn"> Text me reminders about my party (confirmation, balance due, day-before). Msg & data rates may apply. Reply STOP to opt out.</label>
+      <label class="check"><input type="checkbox" id="smsOptIn"> <span data-i18n="smsOptIn"></span></label>
+      <label class="check"><input type="checkbox" id="mktOptIn"> <span data-i18n="marketingOptIn"></span></label>
     </div>
 
     <div class="card">
-      <h2 style="margin-top:0">Summary</h2>
-      <table class="receipt" id="summary"><tr><td class="muted">Choose a package and date to see your price.</td></tr></table>
-      <details id="codeBox" style="margin-top:10px"><summary class="muted" style="cursor:pointer">Have a gift card or referral code?</summary>
-        <div class="linkbox" style="margin-top:8px"><input id="code" placeholder="Enter code" autocomplete="off" style="border:0;background:transparent;padding:4px;text-transform:uppercase"><button class="btn small" type="button" id="applyCode">Apply</button></div>
+      <h2 style="margin-top:0" data-i18n="summary"></h2>
+      <div class="upgrade hidden" id="upgrade"></div>
+      <table class="receipt" id="summary"><tr><td class="muted" data-i18n="chooseToPrice"></td></tr></table>
+      <details id="codeBox" style="margin-top:10px"><summary class="muted" style="cursor:pointer" data-i18n="haveCode"></summary>
+        <div class="linkbox" style="margin-top:8px"><input id="code" data-i18n-ph="enterCode" autocomplete="off" style="border:0;background:transparent;padding:4px;text-transform:uppercase"><button class="btn small" type="button" id="applyCode" data-i18n="apply"></button></div>
         <p class="muted small" id="codeMsg"></p></details>
       <p class="muted" id="policy"></p>
       <div id="formError" class="error hidden" role="alert"></div>
-      <div class="actions"><button class="btn" id="payBtn" type="submit" disabled>Continue to payment</button></div>
+      <div class="actions"><button class="btn" id="payBtn" type="submit" disabled data-i18n="continuePay"></button></div>
     </div>
   </form>
 
@@ -94,45 +107,54 @@
   <form id="inquiryForm" class="hidden" novalidate>
     <div class="card">
       <div class="phases two">
-        <figure><img src="/static/img/courts.jpg" alt="Indoor courts" loading="lazy"><figcaption>Courts &amp; turf for team events</figcaption></figure>
-        <figure><img src="/static/img/training.jpg" alt="Turf training room" loading="lazy"><figcaption>Training room for skill sessions</figcaption></figure>
+        <figure><img src="/static/img/courts.jpg" alt="" loading="lazy"><figcaption data-i18n="courtsCaption"></figcaption></figure>
+        <figure><img src="/static/img/training.jpg" alt="" loading="lazy"><figcaption data-i18n="trainingCaption"></figcaption></figure>
       </div>
-      <h2>Tell us about your event</h2>
-      <p class="muted">Corporate outings, adult nights, senior groups and team skill building. We'll get back to you with a quote.</p>
-      <label for="eventType">Type of event</label><select id="eventType"></select>
+      <h2 data-i18n="inquiryTitle"></h2>
+      <p class="muted" data-i18n="inquiryIntro"></p>
+      <label for="eventType" data-i18n="eventType"></label><select id="eventType"></select>
       <div class="row">
-        <div><label for="iName">Your name</label><input id="iName" autocomplete="name"></div>
-        <div><label for="iOrg">Organization / team <span class="muted">(optional)</span></label><input id="iOrg" autocomplete="organization"></div>
-      </div>
-      <div class="row">
-        <div><label for="iEmail">Email</label><input id="iEmail" type="email" autocomplete="email"></div>
-        <div><label for="iPhone">Phone</label><input id="iPhone" type="tel" autocomplete="tel"></div>
+        <div><label for="iName" data-i18n="yourName"></label><input id="iName" autocomplete="name"></div>
+        <div><label for="iOrg"><span data-i18n="orgTeam"></span> <span class="muted" data-i18n="optional"></span></label><input id="iOrg" autocomplete="organization"></div>
       </div>
       <div class="row">
-        <div><label for="iDate">Preferred date</label><input id="iDate" type="date"></div>
-        <div><label for="iSize">Group size</label><input id="iSize" type="number" min="1" inputmode="numeric"></div>
+        <div><label for="iEmail" data-i18n="email"></label><input id="iEmail" type="email" autocomplete="email"></div>
+        <div><label for="iPhone" data-i18n="phone"></label><input id="iPhone" type="tel" autocomplete="tel"></div>
       </div>
-      <label for="iMsg">Details</label><textarea id="iMsg" rows="4"></textarea>
-      <div id="corpPartners" class="hidden"><label>Add partner products to your quote <span class="muted">(optional)</span></label><div id="corpList"></div></div>
+      <div class="row">
+        <div><label for="iDate" data-i18n="prefDate"></label><input id="iDate" type="date"></div>
+        <div><label for="iSize" data-i18n="groupSize"></label><input id="iSize" type="number" min="1" inputmode="numeric"></div>
+      </div>
+      <label for="iMsg" data-i18n="details"></label><textarea id="iMsg" rows="4"></textarea>
+      <div id="corpPartners" class="hidden"><label><span data-i18n="partnerProducts"></span> <span class="muted" data-i18n="optional"></span></label><div id="corpList"></div></div>
       <div id="inquiryError" class="error hidden" role="alert"></div>
-      <div class="actions"><button class="btn" type="submit">Send request</button></div>
+      <div class="actions"><button class="btn" type="submit" data-i18n="sendRequest"></button></div>
     </div>
   </form>
+  <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0" data-i18n="thanksGot"></h2><p data-i18n="reachOut"></p></div>
+
+  <section class="card hidden" id="faqCard"><h2 style="margin-top:0" data-i18n="faqTitle"></h2><div id="faq"></div></section>
+  <section class="card hidden" id="instaCard"><h2 style="margin-top:0"><span data-i18n="instaTitle"></span> <a id="instaHandle" target="_blank" rel="noopener"></a></h2><div class="insta" id="insta"></div></section>
+
   <dialog id="zoom" class="zoom">
     <img id="zoomImg" alt="">
     <h2 id="zoomName"></h2>
     <p class="muted" id="zoomDetail"></p>
-    <div id="zoomInclWrap"><h3 class="incl-h">What's included</h3><ul class="incl" id="zoomIncl"></ul></div>
-    <form method="dialog"><button class="btn ghost">Close</button></form>
+    <div id="zoomInclWrap"><h3 class="incl-h" data-i18n="whatsIncluded"></h3><ul class="incl" id="zoomIncl"></ul></div>
+    <form method="dialog"><button class="btn ghost" data-i18n="close"></button></form>
   </dialog>
-  <div id="inquiryDone" class="card hidden"><h2 style="margin-top:0">Thanks — we got it!</h2><p>We'll reach out within one business day.</p></div>
+  <dialog id="tour" class="zoom tour"><div id="tourBody"></div><form method="dialog"><button class="btn ghost" data-i18n="close"></button></form></dialog>
 </main>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/sponsors.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
+const t = NXI18N.t, LANG = NXI18N.lang;
 const money = (c) => '$' + (c / 100).toFixed(2);
-let CFG, selectedTime = null, quoteTimer, LOCATION = null;
+const money0 = (c) => '$' + (Math.abs(c) / 100).toFixed(c % 100 ? 2 : 0);
+let CFG, SITE, selectedTime = null, quoteTimer, LOCATION = null, upgradedFrom = null;
+const params = new URLSearchParams(location.search);
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
@@ -142,54 +164,69 @@ async function api(path, body) {
 }
 
 function ymdLocal(d) { return d.toLocaleDateString('en-CA'); }
-
 const escH = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const incList = (t) => String(t || '').split('\n').filter((x) => x.trim()).map((x) => `<li>${escH(x)}</li>`).join('');
+const incList = (x) => String(x || '').split('\n').filter((y) => y.trim()).map((y) => `<li>${escH(y)}</li>`).join('');
+const selectedPkg = () => CFG.packages.find((p) => p.id === document.querySelector('input[name=package]:checked')?.value) || CFG.packages[0];
+const lenOf = (p) => { const m = p.phases.reduce((s, x) => s + x.minutes, 0); return m % 60 ? t('lenMinutes', m) : t('lenHours', m / 60); };
+const unitText = (a) => (a.unit === 'each' ? t('each') : `${t('per')} ${a.unitLabel || a.unit}`);
+const listJoin = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} ${t('and')} ${a.at(-1)}`);
+
 async function init() {
-  CFG = await api('/api/config');
+  NXI18N.apply();
+  NXI18N.toggle($('langBox'));
+  [CFG, SITE] = await Promise.all([api('/api/config?lang=' + LANG), api('/api/site?lang=' + LANG).catch(() => null)]);
   $('bizName').textContent = CFG.business.name;
   // Location: a picker only when more than one location takes bookings.
-  const qLoc = new URLSearchParams(location.search).get('location');
+  const qLoc = params.get('location');
   LOCATION = qLoc && CFG.locations.some((l) => l.id === qLoc) ? qLoc : CFG.defaultLocation;
   const locBox = $('locBox');
+  const here = CFG.locations.find((l) => l.id === LOCATION);
   if (CFG.locations.length > 1) {
-    locBox.innerHTML = '<label for="locSel" style="margin-top:0">Location</label><select id="locSel">' + CFG.locations.map((l) => `<option value="${l.id}" ${l.id === LOCATION ? 'selected' : ''}>${l.name} · ${l.address}</option>`).join('') + '</select>';
+    locBox.innerHTML = `<label for="locSel" style="margin-top:0">${t('location')}</label><select id="locSel">` + CFG.locations.map((l) => `<option value="${l.id}" ${l.id === LOCATION ? 'selected' : ''}>${escH(l.name)} · ${escH(l.address)}</option>`).join('') + '</select>';
     $('locSel').onchange = () => { LOCATION = $('locSel').value; onLocationChange(); };
   } else {
-    const l = CFG.locations[0];
-    locBox.innerHTML = `<p class="muted" style="margin:0 0 12px">📍 ${l.name} · ${l.address}</p>`;
+    locBox.innerHTML = `<p class="muted" style="margin:0 0 12px">📍 ${escH(here.name)} · ${escH(here.address)}</p>`;
   }
-  const params = new URLSearchParams(location.search);
+  showSite(here);
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
   if (params.get('embed')) { document.body.classList.add('embedded'); $('calLink').href = '/calendar?embed=1'; }
-  if (params.get('tab') === 'inquiry') setTimeout(() => document.querySelector('[data-tab=inquiry]').click());
-  const wantTime = params.get('time');
+  if (params.get('tab') === 'inquiry') setTimeout(() => { document.querySelector('[data-tab=inquiry]').click(); if (params.get('type')) $('eventType').value = params.get('type'); });
   if (!CFG.stripe) $('demoBanner').classList.remove('hidden');
-  if (new URLSearchParams(location.search).get('cancelled')) $('cancelBanner').classList.remove('hidden');
+  if (params.get('cancelled')) $('cancelBanner').classList.remove('hidden');
 
-  $('packages').innerHTML = CFG.packages.map((p, i) => `
-    <label class="pkg"><input type="radio" name="package" value="${p.id}" ${i === 0 ? 'checked' : ''}>
+  // Packages, the comparison table and the schedule strip
+  const want = CFG.packages.some((p) => p.id === params.get('package')) ? params.get('package') : CFG.packages[0].id;
+  $('packages').innerHTML = CFG.packages.map((p) => `
+    <label class="pkg"><input type="radio" name="package" value="${p.id}" ${p.id === want ? 'checked' : ''}>
       <div class="top"><span>${escH(p.name)}</span><span>${money(p.priceCents)}</span></div>
       ${p.includes ? `<ul class="incl">${incList(p.includes)}</ul>` : `<p>${escH(p.description)}</p>`}</label>`).join('');
+  renderCompare();
   $('kids').max = CFG.party.maxKids;
+  if (Number(params.get('kids')) > 0) $('kids').value = Math.min(CFG.party.maxKids, Number(params.get('kids')));
 
   $('addons').innerHTML = CFG.addOnCategories.map((c, i) => {
     const items = CFG.addOns.filter((a) => a.category === c.id);
     if (!items.length) return '';
-    return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${c.name} <span class="muted" data-count="${c.id}"></span></summary>` +
+    return `<details class="addon-group" ${i === 0 ? 'open' : ''}><summary>${escH(c.name)} <span class="muted" data-count="${c.id}"></span></summary>` +
       items.map((a) => `
-      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="See ${a.name}"><img src="${a.photo}" alt="${a.name}" loading="lazy"></button><div>${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}${a.includes ? `<button type="button" class="incl-link" data-zoom="${a.id}">What's included ›</button>` : ''}
-          <small><b>${money(a.priceCents)}</b> ${a.unit === 'each' ? 'each' : '/ ' + a.unit}${a.minQty > 1 ? ` · min ${a.minQty}` : ''}${a.leadDays ? ` · order ${a.leadDays >= 28 ? '4 weeks' : a.leadDays >= 14 ? '2 weeks' : a.leadDays + ' days'} ahead` : ''}</small>
-          <small class="lead-warn hidden">Not enough time before this date</small></div>
-        <input type="number" min="0" max="${a.maxQty || 200}" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${a.name} quantity"></div>`).join('') +
+      <div class="addon" data-row="${a.id}"><button type="button" class="addon-pic" data-zoom="${a.id}" aria-label="${escH(a.name)}"><img src="${a.photo}" alt="${escH(a.name)}" loading="lazy"></button><div>${escH(a.name)}${a.detail ? `<small>${escH(a.detail)}</small>` : ''}${a.includes ? `<button type="button" class="incl-link" data-zoom="${a.id}">${t('whatsIncludedLink')}</button>` : ''}
+          <small><b>${money(a.priceCents)}</b> ${escH(unitText(a))}${a.minQty > 1 ? ` · ${t('min', a.minQty)}` : ''}${a.leadDays ? ` · ${t('orderAhead', a.leadDays >= 28 ? t('weeks', 4) : a.leadDays >= 14 ? t('weeks', 2) : t('daysN', a.leadDays))}` : ''}</small>
+          <small class="lead-warn hidden"></small></div>
+        <input type="number" min="0" max="${a.maxQty || 200}" value="0" inputmode="numeric" data-addon="${a.id}" data-min="${a.minQty || 1}" data-category="${a.category}" aria-label="${escH(a.name)}"></div>`).join('') +
       '</details>';
   }).join('');
+  // Coming back from an email: put their add-ons back.
+  for (const pair of String(params.get('addons') || '').split(',')) {
+    const [id, q] = pair.split(':');
+    const inp = id && document.querySelector(`[data-addon="${CSS.escape(id)}"]`);
+    if (inp && Number(q) > 0) { inp.value = Number(q); inp.closest('details').open = true; }
+  }
   // Tap a product photo to see it larger.
   document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => {
     const a = CFG.addOns.find((x) => x.id === b.dataset.zoom);
     $('zoomImg').src = a.photo; $('zoomImg').alt = a.name;
     $('zoomName').textContent = a.name;
-    $('zoomDetail').textContent = [`$${(a.priceCents / 100).toFixed(2)} ${a.unit === 'each' ? 'each' : 'per ' + a.unit}`, a.minQty > 1 ? `minimum ${a.minQty}` : '', a.maxQty === 1 ? 'one per party' : '', a.leadDays ? `order ${a.leadDays} days ahead` : ''].filter(Boolean).join(' · ');
+    $('zoomDetail').textContent = [`${money(a.priceCents)} ${unitText(a)}`, a.minQty > 1 ? t('minimum', a.minQty) : '', a.maxQty === 1 ? t('onePerParty') : '', a.leadDays ? t('orderAhead', t('daysN', a.leadDays)) : ''].filter(Boolean).join(' · ');
     $('zoomIncl').innerHTML = incList(a.includes);
     $('zoomInclWrap').hidden = !a.includes;
     $('zoom').showModal();
@@ -206,103 +243,175 @@ async function init() {
   const min = new Date(today); min.setDate(min.getDate() + CFG.minDaysAhead);
   const max = new Date(today); max.setDate(max.getDate() + CFG.maxDaysAhead);
   $('date').min = ymdLocal(min); $('date').max = ymdLocal(max);
-  const dayNames = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
   NXSponsors.mount($('sponsorBox'), 'booking', LOCATION);
-  window.onLocationChange = () => { const ld = CFG.locations.find((l) => l.id === LOCATION).partyDays; $('daysHint').textContent = 'Parties run ' + ld.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'; loadSlots(); scheduleQuote(); };
-  $('daysHint').textContent = 'Parties run ' + CFG.locations.find((l) => l.id === LOCATION).partyDays.map((d) => dayNames[d]).join(', ').replace(/, ([^,]*)$/, ' and $1') + '.';
+  const daysLine = () => t('partiesRun', listJoin(CFG.locations.find((l) => l.id === LOCATION).partyDays.map((d) => t('days')[d])));
+  window.onLocationChange = () => { $('daysHint').textContent = daysLine(); loadSlots(); scheduleQuote(); };
+  $('daysHint').textContent = daysLine();
   showSchedule();
-  $('policy').textContent = `A ${CFG.payments.depositPercent}% non-refundable deposit reserves your party. The balance is due ${CFG.payments.balanceDueDaysBefore} days before. Parties booked within ${CFG.payments.balanceDueDaysBefore} days are paid in full.`;
+  $('policy').textContent = t('policy', CFG.payments.depositPercent, CFG.payments.balanceDueDaysBefore) + (CFG.changes ? ' ' + t('changePolicy', CFG.changes.rescheduleMinDays) : '');
 
   fetch('/api/partners/corporate').then((r) => r.json()).then((list) => {
     if (!list.length) return;
-    $('corpList').innerHTML = list.map((p) => `<label class="check" style="margin:6px 0"><input type="checkbox" data-corp="${escH(p.name)} (${escH(p.vendor)})"> ${escH(p.name)} <span class="muted">· ${money(p.priceCents)} ${p.unit === 'each' ? 'each' : '/ ' + escH(p.unit)} · ${escH(p.vendor)}</span></label>`).join('');
+    $('corpList').innerHTML = list.map((p) => `<label class="check" style="margin:6px 0"><input type="checkbox" data-corp="${escH(p.name)} (${escH(p.vendor)})"> ${escH(p.name)} <span class="muted">· ${money(p.priceCents)} ${p.unit === 'each' ? t('each') : t('per') + ' ' + escH(p.unit)} · ${escH(p.vendor)}</span></label>`).join('');
     $('corpPartners').classList.remove('hidden');
   }).catch(() => {});
-  $('eventType').innerHTML = CFG.inquiryTypes.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
+  $('eventType').innerHTML = CFG.inquiryTypes.map((x) => `<option value="${x.id}">${escH(x.name)}</option>`).join('');
 
-  document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
-    document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    $('partyForm').classList.toggle('hidden', t.dataset.tab !== 'party');
-    $('inquiryForm').classList.toggle('hidden', t.dataset.tab !== 'inquiry');
+  document.querySelectorAll('.tab').forEach((x) => x.onclick = () => {
+    document.querySelectorAll('.tab').forEach((y) => y.setAttribute('aria-selected', y === x));
+    $('partyForm').classList.toggle('hidden', x.dataset.tab !== 'party');
+    $('inquiryForm').classList.toggle('hidden', x.dataset.tab !== 'inquiry');
     $('inquiryDone').classList.add('hidden');
   });
 
   $('partyForm').addEventListener('input', (e) => { if (e.target.id === 'date') { loadSlots(); updateLeadTimes(); } if (e.target.dataset?.addon === 'shirt-rush') updateLeadTimes(); scheduleQuote(); });
-  $('packages').addEventListener('change', () => { showSchedule(); shirtRow(); if ($('date').value) loadSlots(); });
+  $('packages').addEventListener('change', () => { upgradedFrom = null; showSchedule(); shirtRow(); renderCompare(); if ($('date').value) loadSlots(); });
   shirtRow();
   $('partyForm').addEventListener('change', scheduleQuote);
   $('partyForm').addEventListener('submit', submitParty);
-  $('theme').innerHTML += CFG.themes.map((t) => `<option value="${t.id}">${t.emoji} ${t.name}</option>`).join('');
+  $('theme').innerHTML += CFG.themes.map((x) => `<option value="${x.id}">${x.emoji} ${escH(x.name)}</option>`).join('');
   $('applyCode').onclick = () => { appliedCode = $('code').value.trim().toUpperCase(); scheduleQuote(); };
   if (params.get('code')) { $('code').value = params.get('code'); appliedCode = params.get('code').toUpperCase(); $('codeBox').open = true; }
-  // Coming from the calendar: fill in the date and time they picked.
+  $('wJoin').onclick = joinWaitlist;
+  // Coming from the calendar (or an email): fill in the date and time they picked.
   if (/^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '')) {
     $('date').value = params.get('date');
     await loadSlots();
     updateLeadTimes();
-    const slot = wantTime && $('slots').querySelector(`.slot[data-time="${wantTime}"]:not([disabled])`);
+    const slot = params.get('time') && $('slots').querySelector(`.slot[data-time="${params.get('time')}"]:not([disabled])`);
     if (slot) slot.click();
   }
   $('inquiryForm').addEventListener('submit', submitInquiry);
   scheduleQuote();
 }
 
+// Real photos, video tour, FAQ and Instagram (managed in Admin → Website).
+function showSite(here) {
+  const photos = SITE?.photos?.length ? SITE.photos : null;
+  $('heroImg').alt = here.name;
+  $('heroCap').textContent = photos ? here.name : `${t('rendering')} · ${here.name}`;
+  if (photos) {
+    $('heroImg').src = photos[0];
+    if (photos.length > 1) {
+      $('thumbs').innerHTML = photos.map((p, i) => `<button type="button" aria-label="Photo ${i + 1}" data-photo="${escH(p)}"><img src="${escH(p)}" alt="" loading="lazy"></button>`).join('');
+      $('thumbs').classList.remove('hidden');
+      $('thumbs').querySelectorAll('[data-photo]').forEach((b) => b.onclick = () => { $('heroImg').src = b.dataset.photo; });
+    }
+  }
+  const v = SITE?.tourVideo;
+  if (v) {
+    $('tourBtn').classList.remove('hidden');
+    $('tourBtn').onclick = () => {
+      $('tourBody').innerHTML = v.kind === 'file' ? `<video src="${escH(v.src)}" controls autoplay playsinline style="width:100%;border-radius:10px"></video>`
+        : `<div class="video"><iframe src="${escH(v.src)}" title="Video tour" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`;
+      $('tour').showModal();
+    };
+    $('tour').addEventListener('close', () => { $('tourBody').innerHTML = ''; });
+  }
+  if (SITE?.faq?.length) {
+    $('faq').innerHTML = SITE.faq.map((f) => `<details class="faq"><summary>${escH(f.q)}</summary><p>${escH(f.a)}</p></details>`).join('');
+    $('faqCard').classList.remove('hidden');
+  }
+  const ig = SITE?.instagram;
+  if (ig?.handle || ig?.posts?.length) {
+    if (ig.handle) { $('instaHandle').textContent = '@' + ig.handle; $('instaHandle').href = `https://www.instagram.com/${encodeURIComponent(ig.handle)}/`; }
+    $('insta').innerHTML = (ig.posts || []).map((u) => `<blockquote class="instagram-media" data-instgrm-permalink="${escH(u)}" data-instgrm-version="14"><a href="${escH(u)}" target="_blank" rel="noopener">${escH(u.replace(/^https:\/\/(www\.)?/, ''))}</a></blockquote>`).join('');
+    $('instaCard').classList.remove('hidden');
+    if (ig.posts?.length) { const s = document.createElement('script'); s.async = true; s.src = 'https://www.instagram.com/embed.js'; document.body.appendChild(s); }
+  }
+}
+
+function renderCompare() {
+  const rows = CFG.compareRows || [];
+  if (!rows.length) { $('compareBox').classList.add('hidden'); return; }
+  const cur = selectedPkg().id;
+  const cell = (p, r) => {
+    if (r.key === 'length') return lenOf(p);
+    const v = p.features?.[r.key];
+    if (r.key === 'sports') return v ?? '—';
+    return v ? `<span class="yes">${t('yes')}</span>` : `<span class="muted">${t('no')}</span>`;
+  };
+  $('compare').innerHTML = `<tr><th></th>${CFG.packages.map((p) => `<th class="${p.id === cur ? 'on' : ''}">${escH(p.name)}<br><span class="muted">${money(p.priceCents)}</span></th>`).join('')}</tr>` +
+    rows.map((r) => `<tr><td>${escH(r.label)}</td>${CFG.packages.map((p) => `<td class="${p.id === cur ? 'on' : ''}">${cell(p, r)}</td>`).join('')}</tr>`).join('');
+}
+
+let slotsCache = null;
 async function loadSlots() {
   const keep = selectedTime; // keep the chosen time if it still works for the new package
   selectedTime = null;
   const date = $('date').value;
-  $('slotsWrap').classList.add('hidden'); $('slotsMsg').textContent = '';
+  $('slotsWrap').classList.add('hidden'); $('slotsMsg').textContent = ''; $('waitBox').classList.add('hidden');
   if (!date) return;
   try {
-    const pkgId = document.querySelector('input[name=package]:checked')?.value || '';
-    const res = await api(`/api/availability?date=${date}&location=${LOCATION}&package=${pkgId}`);
-    if (!res.open) { $('slotsMsg').textContent = "We don't run parties that day — please pick another date."; return; }
-    if (!res.slots.some((s) => s.available)) { $('slotsMsg').textContent = 'That day is fully booked. Please try another date.'; }
-    $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled title="Taken"'}>${s.label}<small>to ${s.endLabel}</small></button>`).join('');
+    const res = await api(`/api/availability?date=${date}&location=${LOCATION}&package=${selectedPkg().id}`);
+    slotsCache = res;
+    if (!res.open) { $('slotsMsg').textContent = t('noParties'); return; }
+    const anyOpen = res.slots.some((s) => s.available);
+    if (!anyOpen) $('slotsMsg').textContent = t('dayFull');
+    $('slots').innerHTML = res.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : `disabled title="${t('taken')}"`}>${s.label}<small>${t('to')} ${s.endLabel}</small>${s.priceCents && s.available ? `<em class="${s.priceCents > 0 ? 'up' : 'down'}" title="${escH(s.priceLabel)}">${s.priceCents > 0 ? t('priceUp', money0(s.priceCents)) : t('priceDown', money0(s.priceCents))}</em>` : ''}</button>`).join('');
     $('slots').querySelectorAll('.slot').forEach((b) => b.onclick = () => {
       $('slots').querySelectorAll('.slot').forEach((x) => x.setAttribute('aria-pressed', x === b));
       selectedTime = b.dataset.time; scheduleQuote();
     });
     $('slotsWrap').classList.remove('hidden');
+    // Full day (or some times taken): offer the waitlist.
+    if (res.slots.some((s) => !s.available)) {
+      const d = NXI18N.date(date);
+      $('waitSummary').textContent = anyOpen ? t('waitAnyTime') : t('waitTitle');
+      $('waitIntro').textContent = t('waitIntro', d);
+      $('waitBox').classList.remove('hidden');
+      $('waitBox').open = !anyOpen;
+      $('wMsg').className = 'hidden';
+    }
     const again = keep && $('slots').querySelector(`.slot[data-time="${keep}"]:not([disabled])`);
     if (again) again.click();
   } catch (e) { $('slotsMsg').textContent = e.message; }
+}
+
+async function joinWaitlist() {
+  const m = $('wMsg');
+  try {
+    await api('/api/waitlist', { date: $('date').value, locationId: LOCATION, packageId: selectedPkg().id, kids: $('kids').value,
+      parentName: $('wName').value || $('parentName').value, email: $('wEmail').value || $('email').value, phone: $('wPhone').value || $('phone').value, smsOptIn: $('wSms').checked, lang: LANG });
+    m.className = 'banner ok'; m.textContent = t('waitDone', NXI18N.date($('date').value));
+    $('wJoin').disabled = true;
+  } catch (e) { m.className = 'error'; m.textContent = e.message; }
 }
 
 function formData() {
   const addOns = {};
   document.querySelectorAll('[data-addon]').forEach((i) => { if (Number(i.value) > 0) addOns[i.dataset.addon] = Number(i.value); });
   return {
-    packageId: document.querySelector('input[name=package]:checked')?.value,
+    packageId: selectedPkg().id,
     kids: Number($('kids').value), partyDate: $('date').value, time: selectedTime, addOns,
     childName: $('childName').value, childAge: $('childAge').value, parentName: $('parentName').value,
     email: $('email').value, phone: $('phone').value, notes: $('notes').value,
     locationId: LOCATION, theme: $('theme').value || undefined, smsOptIn: $('smsOptIn').checked, code: appliedCode || undefined,
+    marketingOptIn: $('mktOptIn').checked, lang: LANG, upgradedFrom: upgradedFrom || undefined,
+    source: (params.get('src') || params.get('utm_source') || (params.get('embed') ? 'website' : 'web')).toLowerCase(),
   };
 }
 
 // MVP already includes a printed shirt for every child, so the shirt add-on becomes "extra shirts" (siblings, parents).
 function shirtRow() {
-  const pkg = CFG.packages.find((p) => p.id === document.querySelector('input[name=package]:checked')?.value);
+  const pkg = selectedPkg();
   const row = document.querySelector('[data-row="shirts"]');
   if (!row) return;
   let note = row.querySelector('.incl-note');
   if (!note) { note = document.createElement('small'); note.className = 'incl-note'; note.style.color = 'var(--ok)'; row.children[1].appendChild(note); }
-  note.textContent = pkg?.shirtsForAll ? `Every child already gets a shirt with ${pkg.name}. Add extras here for siblings or parents.` : '';
+  note.textContent = pkg?.features?.shirts || pkg?.shirtsForAll ? t('shirtsIncluded', pkg.name) : '';
 }
 
 // The schedule depends on the package (Rookie is 90 minutes, the others 2 hours).
 function showSchedule() {
-  const pkg = CFG.packages.find((p) => p.id === document.querySelector('input[name=package]:checked')?.value) || CFG.packages[0];
-  const mins = pkg.phases.reduce((s, p) => s + p.minutes, 0);
-  const len = mins % 60 ? `${mins} minutes` : `${mins / 60} hours`;
-  $('partyLen').textContent = `· ${pkg.name}: ${len}`;
+  const pkg = selectedPkg();
+  $('partyLen').textContent = `· ${pkg.name}: ${lenOf(pkg)}`;
   for (const ph of pkg.phases) {
     const b = document.querySelector(`[data-ph="${ph.key}"]`), l = document.querySelector(`[data-phl="${ph.key}"]`);
     if (b) b.textContent = `${ph.minutes} min`;
     if (l) l.textContent = ph.label;
   }
-  $('lengthHint').textContent = `(${len}: ` + pkg.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
+  $('lengthHint').textContent = `(${lenOf(pkg)}: ` + pkg.phases.map((p) => `${p.minutes} min ${p.label.toLowerCase()}`).join(', ') + ')';
 }
 
 function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(updateQuote, 150); }
@@ -311,13 +420,13 @@ function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(upd
 function updateLeadTimes() {
   const date = $('date').value;
   const days = date ? Math.round((new Date(date + 'T12:00') - new Date(new Date().toDateString() + ' 12:00')) / 86400000) : Infinity;
+  const rush = Number(document.querySelector('[data-addon="shirt-rush"]')?.value) > 0;
   CFG.addOns.forEach((a) => {
     const row = document.querySelector(`[data-row="${a.id}"]`);
     const inp = row.querySelector('input');
     const notNeeded = a.onlyWithinDays && days >= a.onlyWithinDays;
-    const rush = Number(document.querySelector('[data-addon="shirt-rush"]')?.value) > 0;
     const tooSoon = (a.leadDays && days < a.leadDays && !(a.rushable && rush)) || notNeeded;
-    row.querySelector('.lead-warn').textContent = notNeeded ? `Only for parties less than ${a.onlyWithinDays} days away` : a.rushable ? 'Needs Rush shirt printing for this date' : 'Not enough time before this date';
+    row.querySelector('.lead-warn').textContent = notNeeded ? t('onlyWithin', a.onlyWithinDays) : a.rushable ? t('needsRush') : t('notInTime');
     inp.disabled = !!tooSoon;
     if (tooSoon) inp.value = 0;
     row.classList.toggle('unavailable', !!tooSoon);
@@ -331,31 +440,52 @@ function updateAddonCounts() {
     const el = document.querySelector(`[data-count="${c.id}"]`);
     if (!el) return;
     const n = [...document.querySelectorAll(`[data-category="${c.id}"]`)].filter((i) => Number(i.value) > 0).length;
-    el.textContent = n ? `· ${n} selected` : '';
+    el.textContent = n ? t('selected', n) : '';
   });
+}
+
+// "Make it bigger?": the next package up, with what it adds.
+function showUpgrade() {
+  const i = CFG.packages.findIndex((p) => p.id === selectedPkg().id);
+  const next = CFG.packages[i + 1];
+  const box = $('upgrade');
+  if (!next || !next.upgradePitch) { box.classList.add('hidden'); return; }
+  const diff = next.priceCents - CFG.packages[i].priceCents;
+  box.innerHTML = `<b>${t('upgradeTitle')}</b> ${escH(t('upgradeLine', next.name, money0(diff), next.upgradePitch))} <button type="button" class="btn small" id="upBtn">${escH(t('upgradeBtn', next.name))}</button>`;
+  box.classList.remove('hidden');
+  $('upBtn').onclick = () => {
+    const from = upgradedFrom || CFG.packages[i].id;
+    document.querySelector(`input[name=package][value="${next.id}"]`).checked = true;
+    showSchedule(); shirtRow(); renderCompare();
+    upgradedFrom = from;
+    if ($('date').value) loadSlots();
+    scheduleQuote();
+  };
 }
 
 let appliedCode = '';
 async function updateQuote() {
   const f = formData();
-  const pkg = CFG.packages.find((p) => p.id === f.packageId);
-  $('kidsHint').textContent = pkg ? `Includes ${pkg.includedKids} kids; ${money(pkg.extraKidCents)} per extra child (max ${CFG.party.maxKids}).` : '';
+  const pkg = selectedPkg();
+  $('kidsHint').textContent = t('includesKids', pkg.includedKids, money(pkg.extraKidCents), CFG.party.maxKids);
   $('formError').classList.add('hidden');
+  showUpgrade();
   if (!f.partyDate) { $('payBtn').disabled = true; return; }
   try {
     const q = await api('/api/quote', f);
-    const rows = q.lines.map((l) => `<tr${l.kind === 'discount' ? ' class="yes"' : ''}><td>${l.name}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('');
+    const rows = q.lines.map((l) => `<tr${l.kind === 'discount' || l.totalCents < 0 ? ' class="yes"' : ''}><td>${escH(l.name)}${l.qty > 1 ? ' × ' + l.qty : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('');
     const due = q.dueTodayCents ?? q.depositCents;
-    $('summary').innerHTML = (q.notes || []).map((n) => `<tr><td colspan="2" class="note-row">${escH(n)}</td></tr>`).join('') + rows +
-      `<tr class="sub"><td>Subtotal</td><td class="num">${money(q.subtotalCents)}</td></tr>` +
-      `<tr class="sub"><td>${CFG.tax.label}</td><td class="num">${money(q.taxCents)}</td></tr>` +
-      `<tr class="total"><td>Total</td><td class="num">${money(q.totalCents)}</td></tr>` +
-      (q.gift ? `<tr><td>${q.payInFull ? 'Payment' : `${CFG.payments.depositPercent}% deposit`}</td><td class="num">${money(q.depositCents)}</td></tr><tr class="yes"><td>Gift card ${q.gift.code}</td><td class="num">−${money(q.gift.applyCents)}</td></tr>` : '') +
-      `<tr class="due"><td>${q.gift ? 'Due today' : q.payInFull ? 'Due today (paid in full)' : `Due today (${CFG.payments.depositPercent}% deposit)`}</td><td class="num">${money(due)}</td></tr>` +
-      (q.payInFull ? '' : `<tr><td class="muted">Balance due by ${new Date(q.balanceDueDate + 'T12:00').toLocaleDateString()}</td><td class="num muted">${money(q.balanceCents)}</td></tr>`);
+    $('summary').innerHTML = (upgradedFrom ? `<tr><td colspan="2" class="note-row ok-row">${escH(t('upgradedNote', pkg.name))}</td></tr>` : '') +
+      (q.notes || []).map((n) => `<tr><td colspan="2" class="note-row">${escH(n)}</td></tr>`).join('') + rows +
+      `<tr class="sub"><td>${t('subtotal')}</td><td class="num">${money(q.subtotalCents)}</td></tr>` +
+      `<tr class="sub"><td>${escH(CFG.tax.label)}</td><td class="num">${money(q.taxCents)}</td></tr>` +
+      `<tr class="total"><td>${t('total')}</td><td class="num">${money(q.totalCents)}</td></tr>` +
+      (q.gift ? `<tr><td>${q.payInFull ? t('payment') : t('deposit', CFG.payments.depositPercent)}</td><td class="num">${money(q.depositCents)}</td></tr><tr class="yes"><td>${t('giftCard', q.gift.code)}</td><td class="num">−${money(q.gift.applyCents)}</td></tr>` : '') +
+      `<tr class="due"><td>${q.gift ? t('dueToday') : q.payInFull ? t('dueTodayFull') : t('dueTodayDeposit', CFG.payments.depositPercent)}</td><td class="num">${money(due)}</td></tr>` +
+      (q.payInFull ? '' : `<tr><td class="muted">${t('balanceDueBy', new Date(q.balanceDueDate + 'T12:00').toLocaleDateString(NXI18N.locale))}</td><td class="num muted">${money(q.balanceCents)}</td></tr>`);
     $('payBtn').disabled = !selectedTime;
-    $('payBtn').textContent = selectedTime ? (due > 0 ? `Pay ${money(due)} and reserve` : 'Reserve with gift card') : 'Pick a start time';
-    $('codeMsg').textContent = q.referral ? `Referral code applied: ${money(CFG.referral.friendDiscountCents)} off.` : q.gift ? `Gift card applied. ${money(q.gift.balanceCents - q.gift.applyCents)} will stay on the card.` : '';
+    $('payBtn').textContent = selectedTime ? (due > 0 ? t('payReserve', money(due)) : t('reserveGift')) : t('pickTime');
+    $('codeMsg').textContent = q.referral ? t('referralApplied', money(CFG.referral.friendDiscountCents)) : q.gift ? t('giftApplied', money(q.gift.balanceCents - q.gift.applyCents)) : '';
   } catch (e) {
     if (appliedCode) { $('codeMsg').textContent = e.message; appliedCode = ''; scheduleQuote(); return; }
     $('payBtn').disabled = true;
@@ -367,9 +497,9 @@ async function submitParty(e) {
   e.preventDefault();
   const f = formData();
   if (!f.parentName.trim() || !f.email.trim() || !f.phone.trim()) {
-    $('formError').textContent = 'Please fill in your name, email and phone.'; $('formError').classList.remove('hidden'); return;
+    $('formError').textContent = t('fillContact'); $('formError').classList.remove('hidden'); return;
   }
-  $('payBtn').disabled = true; $('payBtn').textContent = 'Reserving…';
+  $('payBtn').disabled = true; $('payBtn').textContent = t('reserving');
   try {
     const res = await api('/api/bookings', f);
     // Stripe's payment page can't run inside an iframe, so leave the embed for the full window.
@@ -387,7 +517,7 @@ async function submitInquiry(e) {
     await api('/api/leads', {
       eventType: $('eventType').value, name: $('iName').value, organization: $('iOrg').value, email: $('iEmail').value,
       phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value,
-      message: [$('iMsg').value, ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`)].filter(Boolean).join('\n'),
+      message: [$('iMsg').value, ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`), LANG === 'es' ? '(Prefers Spanish)' : ''].filter(Boolean).join('\n'),
     });
     $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');
   } catch (err) { $('inquiryError').textContent = err.message; $('inquiryError').classList.remove('hidden'); }

@@ -40,16 +40,16 @@
 </head>
 <body>
 <main>
-  <img id="logo" class="page-logo hidden" alt="">
+  <div class="topline"><img id="logo" class="page-logo hidden" alt=""><span id="langBox"></span></div>
   <p class="eyebrow" id="bizName">Next Generation Sports Complex</p>
   <figure class="hero">
     <img src="/static/img/cheer.jpg" alt="NXGS event room with stadium seating" width="1280" height="720">
-    <figcaption>Rendering · NXGS Farmingdale</figcaption>
+    <figcaption id="heroCap">Rendering · NXGS Farmingdale</figcaption>
   </figure>
-  <h1>Party availability</h1>
+  <h1 data-i18n="calTitle">Party availability</h1>
   <div id="locBox"></div>
   <div id="sponsorBox"></div>
-  <p class="live" id="live">Live — updates automatically</p>
+  <p class="live" id="live" data-i18n="live">Live — updates automatically</p>
 
   <div class="card">
     <div class="cal-head">
@@ -59,10 +59,10 @@
     </div>
     <div class="grid" id="grid" role="grid"></div>
     <div class="legend">
-      <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>Open</span>
-      <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>Few times left</span>
-      <span><i style="background:var(--bad-bg)"></i>Booked</span>
-      <span><i style="background:transparent;border:1px solid var(--line)"></i>Closed</span>
+      <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i><span data-i18n="open">Open</span></span>
+      <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i><span data-i18n="fewTimes">Few times left</span></span>
+      <span><i style="background:var(--bad-bg)"></i><span data-i18n="booked">Booked</span></span>
+      <span><i style="background:transparent;border:1px solid var(--line)"></i><span data-i18n="closed">Closed</span></span>
     </div>
   </div>
 
@@ -73,10 +73,11 @@
   </div>
 
   <div class="card">
-    <p style="margin:0">Planning a corporate, adult, senior or team event? <a href="/book?tab=inquiry" id="inquiryLink">Send us a request</a> and we'll get back to you with options.</p>
+    <p style="margin:0" id="groupLine"></p>
   </div>
 </main>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/sponsors.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -84,7 +85,8 @@ const params = new URLSearchParams(location.search);
 const embedded = params.get('embed') ? '&embed=1' : '';
 let CFG, month, selected = null, refreshTimer, LOCATION = null;
 
-const STATUS = { open: 'Open', few: 'Few left', full: 'Booked', closed: '', past: '', later: '', call: 'Call us' };
+const t = NXI18N.t, LANG = NXI18N.lang, LQ = LANG === 'es' ? '&lang=es' : '';
+const STATUS = { open: t('open'), few: t('fewLeft'), full: t('booked'), closed: '', past: '', later: '', call: t('callUs') };
 
 async function getJSON(url) {
   const r = await fetch(url, { cache: 'no-store' });
@@ -97,7 +99,10 @@ function ym(d) { return d.toLocaleDateString('en-CA').slice(0, 7); }
 function addMonths(m, n) { const [y, mo] = m.split('-').map(Number); return ym(new Date(y, mo - 1 + n, 1)); }
 
 async function init() {
-  CFG = await getJSON('/api/config');
+  NXI18N.apply(); NXI18N.toggle($('langBox'));
+  $('groupLine').innerHTML = t('groupEvent', '/book?tab=inquiry' + LQ + embedded);
+  CFG = await getJSON('/api/config?lang=' + LANG);
+  $('heroCap').textContent = `${t('rendering')} · ${CFG.locations.find((l) => l.id === (CFG.defaultLocation))?.name || ''}`;
   $('bizName').textContent = CFG.business.name;
   // Location: a picker only when more than one location takes bookings.
   LOCATION = params.get('location') && CFG.locations.some((l) => l.id === params.get('location')) ? params.get('location') : CFG.defaultLocation;
@@ -112,7 +117,7 @@ async function init() {
   NXSponsors.mount($('sponsorBox'), 'calendar', LOCATION);
   window.onLocationChange = () => { NXSponsors.mount($('sponsorBox'), 'calendar', LOCATION); selected = null; $('dayCard').classList.add('hidden'); load(); };
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
-  if (embedded) { document.body.classList.add('embedded'); $('inquiryLink').href = '/book?embed=1&tab=inquiry'; }
+  if (embedded) document.body.classList.add('embedded');
   month = params.get('month') || ym(new Date());
   $('prev').onclick = () => { month = addMonths(month, -1); selected = null; load(); };
   $('next').onclick = () => { month = addMonths(month, 1); selected = null; load(); };
@@ -127,23 +132,23 @@ async function load(quiet) {
     const cal = await getJSON(`/api/calendar?month=${month}&location=${LOCATION}`);
     render(cal);
     if (selected) await showDay(selected, true);
-    $('live').textContent = 'Live — updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    $('live').textContent = t('liveUpdated', new Date().toLocaleTimeString(NXI18N.locale, { hour: 'numeric', minute: '2-digit' }));
   } catch (e) { if (!quiet) $('grid').innerHTML = `<p class="error" style="grid-column:1/-1">${e.message}</p>`; }
 }
 
 function render(cal) {
   const [y, m] = cal.month.split('-').map(Number);
-  $('monthLabel').textContent = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  $('monthLabel').textContent = new Date(y, m - 1, 1).toLocaleDateString(NXI18N.locale, { month: 'long', year: 'numeric' });
   $('prev').disabled = cal.month <= ym(new Date());
   const lastBookable = new Date(); lastBookable.setDate(lastBookable.getDate() + cal.maxDaysAhead);
   $('next').disabled = cal.month >= ym(lastBookable);
   const firstDow = new Date(y, m - 1, 1).getDay();
-  let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => `<div class="dow">${d}</div>`).join('');
+  let html = t('dows').map((d) => `<div class="dow">${d}</div>`).join('');
   html += '<div></div>'.repeat(firstDow);
   for (const d of cal.days) {
     const n = Number(d.date.slice(8));
     const clickable = d.status === 'open' || d.status === 'few';
-    const label = d.status === 'open' || d.status === 'few' ? `${d.available} open` : STATUS[d.status];
+    const label = d.status === 'open' || d.status === 'few' ? t('nOpen', d.available) : STATUS[d.status];
     html += `<button class="day ${d.status} ${d.date === cal.today ? 'today' : ''}" data-date="${d.date}" ${clickable ? '' : 'disabled'} aria-pressed="${d.date === selected}"
       aria-label="${d.date}: ${label || 'not available'}"><span class="n">${n}</span><span class="s">${label}</span></button>`;
   }
@@ -160,12 +165,12 @@ async function showDay(date, quiet) {
   const res = await getJSON(`/api/availability?date=${date}&location=${LOCATION}`).catch(() => null);
   if (!res) return;
   card.classList.remove('hidden');
-  $('dayTitle').textContent = new Date(date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  $('dayTitle').textContent = NXI18N.date(date);
   const open = res.slots.filter((s) => s.available);
-  $('dayHint').textContent = open.length ? 'Tap a start time to book. Times shown are for 2-hour parties; the 90-minute Rookie Party fits too.' : 'This day just filled up — please choose another.';
+  $('dayHint').textContent = open.length ? t('tapTime') : t('dayJustFilled');
   $('times').innerHTML = res.slots.map((s) => s.available
-    ? `<a class="time" href="/book?date=${date}&time=${s.time}&location=${LOCATION}${embedded}">${s.label}<small>to ${s.endLabel}</small></a>`
-    : `<span class="time taken">${s.label}<small>taken</small></span>`).join('');
+    ? `<a class="time" href="/book?date=${date}&time=${s.time}&location=${LOCATION}${embedded}${LQ}">${s.label}<small>${t('to')} ${s.endLabel}${s.priceCents ? ` · ${s.priceCents > 0 ? '+' : '−'}$${Math.abs(s.priceCents / 100)}` : ''}</small></a>`
+    : `<span class="time taken">${s.label}<small>${t('taken')}</small></span>`).join('');
   if (!quiet) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

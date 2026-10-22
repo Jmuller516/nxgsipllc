@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Party timer</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    main { max-width: 1100px; }
+    .clock { font-size: 2.4rem; font-weight: 800; font-variant-numeric: tabular-nums; margin: 0; }
+    .rooms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+    .room { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card); }
+    .room h3 { margin: 0 0 6px; font-size: .95rem; color: var(--muted); }
+    .room p { margin: 2px 0; font-weight: 700; }
+    .tparties { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    .tp { border: 3px solid var(--line); border-radius: 16px; padding: 16px; background: var(--card); }
+    .tp.soon { border-color: var(--accent); }
+    .tp.now-change { animation: flash 1s ease 3; }
+    @keyframes flash { 50% { background: color-mix(in srgb, var(--accent) 25%, var(--card)); } }
+    @media (prefers-reduced-motion: reduce) { .tp.now-change { animation: none; outline: 4px solid var(--accent); } }
+    .tp.done, .tp.later { opacity: .6; }
+    .tp h2 { margin: 0; font-size: 1.3rem; }
+    .phase { font-size: 1.5rem; font-weight: 800; margin: 10px 0 2px; }
+    .left { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+    .next { color: var(--muted); margin: 6px 0 0; }
+    .steps { display: flex; gap: 4px; margin-top: 10px; }
+    .steps span { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
+    .steps span.on { background: var(--brand); } .steps span.past { background: color-mix(in srgb, var(--brand) 40%, transparent); }
+    @media (max-width: 640px) { .rooms { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="toolbar" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+    <div><label for="day">Day</label><input id="day" type="date"></div>
+    <div><label for="where">Location</label><select id="where"></select></div>
+    <div><label for="at">Practice from <span class="muted">(optional)</span></label><input id="at" type="time" step="900"></div>
+    <button class="btn ghost" id="sound">🔈 Turn on sound</button>
+    <a class="btn ghost" href="/admin/checkin">Check-in</a>
+    <a class="btn ghost" href="/admin">Admin</a>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:10px;flex-wrap:wrap">
+    <h1 style="margin:0">Party timer</h1><p class="clock" id="clock"></p>
+  </div>
+  <p class="muted" id="mode"></p>
+  <div class="rooms" id="rooms"></div>
+  <div class="tparties" id="out"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const label = (m) => { const h = Math.floor(m / 60), mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+const q = new URLSearchParams(location.search);
+let DATA = null, practiceStart = null, practiceBase = null, audio = null, lastPhase = {};
+const ROOMS = { play: 'Field', gameRoom: 'Video game room', food: 'Party room' };
+
+/** Minutes after midnight "now": the real clock, or the practice clock. */
+function nowMin() {
+  if (practiceBase != null) return practiceBase + (Date.now() - practiceStart) / 60000;
+  const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+}
+
+async function load() {
+  if (!$('where').options.length) {
+    const locs = await (await fetch('/api/admin/locations')).json();
+    $('where').innerHTML = locs.map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+    $('where').value = q.get('location') || locs[0].id;
+  }
+  const r = await fetch(`/api/admin/runsheet?date=${$('day').value}&location=${$('where').value}`);
+  DATA = await r.json();
+  DATA.parties = (DATA.parties || []).filter((p) => p.status !== 'pending');
+  tick();
+}
+
+function beep() {
+  if (!audio) return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
+  g.gain.setValueAtTime(.25, audio.currentTime); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .8);
+  o.start(); o.stop(audio.currentTime + .8);
+}
+
+function tick() {
+  const now = nowMin();
+  $('clock').textContent = label(Math.floor(now));
+  const today = new Date().toLocaleDateString('en-CA');
+  $('mode').textContent = practiceBase != null ? `Practice mode: the clock started at ${label(practiceBase)} and runs in real time.` : $('day').value !== today ? 'Showing another day. Set a practice time to run its clock.' : 'Live.';
+  if (!DATA) return;
+  const rooms = { play: [], gameRoom: [], food: [] };
+  $('out').innerHTML = DATA.parties.length ? DATA.parties.map((p) => {
+    const sch = p.schedule;
+    const start = sch[0].start, end = sch.at(-1).end;
+    const i = sch.findIndex((s) => now >= s.start && now < s.end);
+    const cur = sch[i];
+    if (cur && rooms[cur.key]) rooms[cur.key].push(`${p.child || p.parent} (${p.timeLabel})`);
+    let state = i >= 0 ? 'on' : now < start ? 'later' : 'done';
+    const left = cur ? (cur.end - now) * 60 : (start - now) * 60;
+    const soon = cur && left <= 300;
+    // Announce a phase change once.
+    const key = cur ? cur.key : state;
+    let changed = false;
+    if (lastPhase[p.id] !== undefined && lastPhase[p.id] !== key) { changed = true; beep(); }
+    lastPhase[p.id] = key;
+    const next = sch[i + 1];
+    return `<div class="tp ${state} ${soon ? 'soon' : ''} ${changed ? 'now-change' : ''}">
+      <h2>${esc(p.child || p.parent)}${p.theme ? ' ' + esc(p.theme.emoji) : ''}</h2>
+      <p class="muted" style="margin:2px 0 0">${esc(p.timeLabel)}–${esc(p.endLabel)} · ${p.kids} kids · ${p.arrived} here${p.host ? ` · Host: ${esc(p.host)}` : ''}</p>
+      ${state === 'on' ? `<p class="phase">${esc(cur.label)}</p><p class="left">${mmss(left)}</p><p class="next">${next ? `Next: ${esc(next.label)} at ${esc(next.from)}` : `Party ends at ${esc(p.endLabel)}`}</p>`
+        : state === 'later' ? `<p class="phase">Starts at ${esc(p.timeLabel)}</p><p class="next">in ${mmss(Math.max(0, left))}</p>` : '<p class="phase">Finished</p>'}
+      <div class="steps">${sch.map((s, k) => `<span class="${k === i ? 'on' : now >= s.end ? 'past' : ''}" title="${esc(s.label)} ${esc(s.from)}"></span>`).join('')}</div>
+      ${p.guests?.allergies?.length ? `<p class="error" style="margin:10px 0 0">Allergies: ${esc(p.guests.allergies.map((a) => `${a.who}: ${a.note}`).join(' · '))}</p>` : ''}</div>`;
+  }).join('') : '<p class="muted">No parties this day.</p>';
+  $('rooms').innerHTML = Object.entries(ROOMS).map(([k, n]) => `<div class="room"><h3>${n}</h3>${rooms[k].length ? rooms[k].map((x) => `<p>${esc(x)}</p>`).join('') : '<p class="muted" style="font-weight:400">Free</p>'}</div>`).join('');
+}
+
+$('day').value = q.get('date') || new Date().toLocaleDateString('en-CA');
+$('day').onchange = () => { lastPhase = {}; load(); };
+$('where').onchange = $('day').onchange;
+$('at').onchange = () => {
+  if (!$('at').value) { practiceBase = null; } else { const [h, m] = $('at').value.split(':').map(Number); practiceBase = h * 60 + m; practiceStart = Date.now(); }
+  lastPhase = {}; tick();
+};
+$('sound').onclick = () => { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); beep(); $('sound').textContent = '🔊 Sound on'; };
+if (q.get('at')) { $('at').value = q.get('at'); $('at').onchange(); }
+load();
+setInterval(tick, 1000);
+setInterval(load, 60000);
+</script>
+</body>
+</html>

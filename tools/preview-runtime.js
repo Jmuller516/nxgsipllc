@@ -183,9 +183,10 @@
       .replace(/location\.search/g, '__search')
       .replace(/location\.origin/g, '__origin')
       .replace(/location\.hash/g, '__hash')
+      .replace(/location\.pathname/g, '__path')
       .replace(/history\.replaceState\([^;]*\);/g, '');
     html = html.replace(/\/static\/img\/[\w-]+\.jpg/g, (m) => IMAGES[m] || m);
-    const vars = `<script>var __search = ${JSON.stringify(u.search)}; var __hash = ${JSON.stringify(u.hash)}; var __origin = "https://book.nxgs.net";<\/script>`;
+    const vars = `<script>var __search = ${JSON.stringify(u.search)}; var __hash = ${JSON.stringify(u.hash)}; var __path = ${JSON.stringify(u.pathname)}; var __origin = "https://book.nxgs.net";<\/script>`;
     return html.replace(/<head>/i, '<head>' + vars + CHILD_SHIM);
   }
 
@@ -235,7 +236,7 @@
     return c.toDataURL('image/png');
   }
 
-  function seed(app) {
+  function seed(app, db) {
     const svc = app.svc;
     // Sample partners (made-up names, for the preview only)
     const vend = app.marketplace.applyAsVendor({ businessName: 'Sample Sweets Bakery', contactName: 'Kim Lee', email: 'kim@example.com', phone: '(516) 555-0150', category: 'Food & treats',
@@ -260,6 +261,7 @@
       const [child, last] = kids[i++ % kids.length];
       try {
         const b = svc.create({ packageId: opts.pkg || ['rookie', 'allstar', 'mvp'][i % 3], kids: opts.kids || 14 + (i % 6), partyDate: ymd(date), time,
+          source: opts.source || ['web', 'web', 'chat', 'website', 'instagram', 'web', 'waitlist', 'recovery'][i % 8], lang: opts.lang, upgradedFrom: opts.upgradedFrom,
           childName: child, childAge: 6 + (i % 7), parentName: `${['Dana', 'Chris', 'Jess', 'Mike', 'Tara', 'Rob'][i % 6]} ${last}`,
           email: `${child.toLowerCase()}.${last.toLowerCase().replace(/\W/g, '')}@example.com`, phone: `(516) 555-01${String(10 + i).slice(-2)}`, addOns: opts.addOns || {} });
         svc.recordPayment(b.id, { kind: b.quote.payInFull ? 'full' : 'deposit', method: 'demo', amountCents: b.deposit_cents, stripeSessionId: 'demo_seed_' + i });
@@ -282,11 +284,15 @@
         ['Mia Kim', 'Rob Kim', 'no', '', false], ['Zoe Santos', 'Jess Santos', 'yes', 'Dairy', true], ['Ethan Greco', 'Dana Greco', 'yes', 'none', false], ['Lily Nguyen', 'Kim Nguyen', 'yes', 'none', true]];
       for (const [child, parent, att, allergy, signed] of guestsList) {
         const email = `${parent.split(' ')[0].toLowerCase()}@example.com`;
-        app.guests.rsvp(show.invite_token, { childName: child, parentName: parent, email, attending: att, allergies: allergy });
+        app.guests.rsvp(show.invite_token, { childName: child, parentName: parent, email, attending: att, allergies: allergy, marketingOptIn: signed });
         if (signed) app.guests.signWaiver({ inviteToken: show.invite_token, childName: child, guardianName: parent, guardianEmail: email, agree: true, typedSignature: parent, signature: sig, medicalNotes: allergy });
       }
     }
-    book(fri1, '17:00');
+    if (show) {
+      // Two guests already at the door, and a highlight video from last time (sample link).
+      app.checkin.checkIn(show.id, 'Noah Patel', 'qr'); app.checkin.checkIn(show.id, 'Ava Murphy', 'tap');
+    }
+    book(fri1, '17:00', { pkg: 'allstar', upgradedFrom: 'rookie', lang: 'es' });
     ['10:00', '10:30', '12:30', '13:00', '15:00', '15:30', '17:30', '18:00'].forEach((t) => book(sat1, t)); // fully booked Saturday
     ['11:00', '13:30', '16:00'].forEach((t) => book(sun1, t));
     ['10:00', '12:00', '12:30', '14:30', '15:00', '17:00'].forEach((t) => book(sat2, t, { addOns: { pizza: 2 } }));
@@ -295,6 +301,14 @@
     book(sat3, '15:30');
     book(sat4, '13:00', { addOns: { backdrop: 1, tumbler: 15 } });
     svc.addBlock({ date: ymd(sun3), reason: 'Fall tournament' });
+    // Families waiting for the sold-out Saturday.
+    app.waitlist.join({ date: ymd(sat1), parentName: 'Gina Lopez', email: 'gina@example.com', phone: '(516) 555-0177', packageId: 'allstar', kids: 16, smsOptIn: true });
+    app.waitlist.join({ date: ymd(sat1), parentName: 'Paulo Reyes', email: 'paulo@example.com', packageId: 'mvp', kids: 18, lang: 'es' });
+    // A family who held a time but never paid: the "still open" email goes out a few hours later.
+    try {
+      const h = svc.create({ packageId: 'mvp', kids: 15, partyDate: ymd(sat4), time: '15:00', parentName: 'Sam Whitaker', email: 'sam.w@example.com', phone: '(516) 555-0166', childName: 'Max' });
+      db.prepare("UPDATE bookings SET status = 'expired', hold_expires_at = ? WHERE id = ?").run(new Date(Date.now() - 4 * 3600000).toISOString(), h.id);
+    } catch (e) {}
     svc.createLead({ eventType: 'corporate', name: 'Karen Lopez', organization: 'Northwell team outing', email: 'klopez@example.com', phone: '(516) 555-0199', preferredDate: ymd(days(24)), groupSize: 45, message: 'Looking for a Friday evening team-building event with food.' });
     svc.createLead({ eventType: 'team', name: 'Coach Dave Romano', organization: 'Massapequa 10U Travel', email: 'coach.dave@example.com', groupSize: 14, message: 'Winter skills clinic, 6 weeks on Sunday mornings.' });
     const card = app.gifts.createManual({ amount: 100, recipientName: 'Sample gift card', message: 'Use this code to try paying with a gift card' });
@@ -329,11 +343,11 @@
     const { createApp } = load('server');
     const db = load('db').open(':memory:');
     app = createApp(db, { assistantRunner });
-    seed(app);
+    seed(app, db);
     await app.background();
     document.getElementById('loading').hidden = true;
     const start = (location.hash || '').slice(1);
-    navigate({ book: '/book', admin: '/admin', calendar: '/calendar', chat: '/chat', party: sampleBooking, gifts: '/gift-cards' }[start] || '/calendar');
+    navigate({ home: '/', book: '/book', admin: '/admin', calendar: '/calendar', chat: '/chat', party: sampleBooking, gifts: '/gift-cards' }[start] || '/');
   }
 
   window.preview = {

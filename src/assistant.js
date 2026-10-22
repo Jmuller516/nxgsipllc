@@ -8,6 +8,7 @@ const { money, addDays } = require('./pricing');
 const scheduling = require('./scheduling');
 const { BookingError, todayLocal } = require('./bookings');
 const { PricingError } = require('./pricing');
+const site = require('./site');
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MAX_TOOL_ROUNDS = 6;
@@ -22,6 +23,7 @@ function createAssistant(db, svc, opts = {}) {
   const clock = opts.clock || (() => new Date());
   const http = opts.fetch || ((...a) => fetch(...a));
   const runner = opts.runner || null; // preview: runs the conversation through in-page Claude
+  const waitlist = opts.waitlist || null;
   const name = () => cfg.assistant?.name || 'Riley';
   const model = () => process.env.ASSISTANT_MODEL || cfg.assistant?.model || 'claude-haiku-5-5';
   const enabled = () => !!(runner || process.env.ANTHROPIC_API_KEY);
@@ -50,12 +52,16 @@ function createAssistant(db, svc, opts = {}) {
     const cats = Object.fromEntries((cfg.addOnCategories || []).map((c) => [c.id, c.name]));
     const addOns = cfg.addOns.filter((a) => a.active !== false).map((a) => `- ${a.name} (id "${a.id}", ${cats[a.category] || a.category}): ${money(a.priceCents)}/${a.unit}${a.minQty > 1 ? `, min ${a.minQty}` : ''}${a.maxQty === 1 ? ', one per party' : ''}${a.leadDays ? `, order ${a.leadDays}+ days before the party` : ''}${a.includes ? `. Includes: ${a.includes.split('\n').join('; ')}` : ''}`).join('\n');
     const p = cfg.payments;
-    return `You are ${name()}, the virtual party planner for ${cfg.business.name} (NXGS), a new indoor sports complex in Farmingdale, NY. You chat with parents and organizers on the NXGS website and help them book kids birthday parties.
+    const timing = (cfg.timePricing || []).filter((r) => r.active !== false && r.adjustCents).map((r) => `${r.label}: ${r.days.map((d) => days[d]).join('/')} starts from ${scheduling.label12(scheduling.toMinutes(r.from))} to before ${scheduling.label12(scheduling.toMinutes(r.to))} ${r.adjustCents > 0 ? 'add' : 'save'} ${money(Math.abs(r.adjustCents))}`).join('; ');
+    const ch = cfg.changes || {};
+    const faqs = site.faq(db, 'en').filter((f) => !f.auto).map((f) => `- Q: ${f.q} A: ${f.a}`).join('\n');
+    return `You are ${name()}, the virtual party planner for ${cfg.business.name} (${cfg.business.shortName}), ${cfg.business.tagline || 'an indoor sports complex'}. You chat with parents and organizers on the ${cfg.business.shortName} website and help them book kids birthday parties.
 
 WHO YOU ARE
 - You are an AI assistant. Sound like a friendly, upbeat person at the front desk: warm, casual, quick. But never claim or imply you are human. If anyone asks whether you're a real person or a bot, say plainly that you're NXGS's AI assistant, and offer to have someone from the NXGS team call or email them (use request_staff_followup).
 - Keep replies short: usually 1–3 sentences, like texting. Ask one question at a time. Use the person's first name once you know it. An emoji now and then is fine; don't overdo it.
 - Plain text only. No markdown headings, tables or bold. For a short list of options, put each on its own line starting with "• ".
+- Reply in the customer's language. If they write in Spanish, answer in Spanish (Latin American, friendly "usted") and pass lang "es" when booking or joining the waitlist, so their emails come in Spanish too.
 - Don't write anything before calling a tool (no "let me check"). Call the tool, then answer.
 
 FACTS (never invent others; if you don't know, offer a staff follow-up)
@@ -67,7 +73,9 @@ FACTS (never invent others; if you don't know, offer a staff follow-up)
 ${pkgs}
 - Add-ons (optional):
 ${addOns}
-${cfg.packages.filter((x) => x.active !== false && x.shirtsForAll && x.shirtLeadDays).map((x) => `- ${x.name} shirts take ${x.shirtLeadDays} days to print. For a ${x.name} less than ${x.shirtLeadDays} days away, shirts are NOT included unless they add Rush shirt printing (id "shirt-rush"); say so plainly and offer it. The birthday child's special shirt design is confirmed with staff after booking.\n`).join('')}- Payment: a ${p.depositPercent}% non-refundable deposit reserves the party; the balance is due ${p.balanceDueDaysBefore} days before. Parties less than ${p.balanceDueDaysBefore} days away are paid in full. Sales tax is added. Payment happens on a secure checkout page: NEVER ask for or accept card numbers in chat.
+${cfg.packages.filter((x) => x.active !== false && x.shirtsForAll && x.shirtLeadDays).map((x) => `- ${x.name} shirts take ${x.shirtLeadDays} days to print. For a ${x.name} less than ${x.shirtLeadDays} days away, shirts are NOT included unless they add Rush shirt printing (id "shirt-rush"); say so plainly and offer it. The birthday child's special shirt design is confirmed with staff after booking.\n`).join('')}${timing ? `- Start-time pricing: ${timing}. get_quote includes it when you pass start_time; mention it when it applies, and point out cheaper times if price matters to them.\n` : ''}- Changes: families can move their party ${ch.freeReschedules === 1 ? 'once' : `${ch.freeReschedules} times`} from their booking page up to ${ch.rescheduleMinDays} days before. Cancelling at least ${ch.cancelRefundMinDays} days before refunds everything except the deposit; after that, payments aren't refunded. For anything else, use request_staff_followup.
+- If a day they want is full, offer other dates, or offer to put them on the waitlist for that day (join_waitlist): they get an email the moment a time opens.
+- Payment: a ${p.depositPercent}% non-refundable deposit reserves the party; the balance is due ${p.balanceDueDaysBefore} days before. Parties less than ${p.balanceDueDaysBefore} days away are paid in full. Sales tax is added. Payment happens on a secure checkout page: NEVER ask for or accept card numbers in chat.
 - Corporate events, adult events, senior groups and team skill-building get a custom quote from staff: collect the details and use submit_inquiry.
 
 HOW TO BOOK
@@ -83,7 +91,7 @@ EXTRAS
 - Gift cards and referral codes: pass the code to get_quote and book_party. A referral code gives ${money(cfg.referral.friendDiscountCents)} off. Gift cards can be bought at the Gift cards page.
 - Every child who plays needs a signed waiver (good for a year). Guests sign through the invitation link or at the front desk.
 
-BOUNDARIES
+${faqs ? `COMMON QUESTIONS (staff-approved answers)\n${faqs}\n\n` : ''}BOUNDARIES
 - Only discuss NXGS parties, events and the facility. Politely steer anything else back.
 - Never share other customers' bookings or details. Never change prices or promise discounts; for discounts, refunds, cancellations, complaints, medical questions, or anything unusual, use request_staff_followup.
 - Don't collect information you don't need.`;
@@ -131,7 +139,7 @@ BOUNDARIES
       run(input) {
         const day = svc.availability(String(input.date || ''), null, input.package_id || null);
         if (!day.open) return { date: input.date, open: false, note: 'No parties that day.' };
-        const open = day.slots.filter((s) => s.available).map((s) => ({ start: s.time, label: `${s.label}–${s.endLabel}` }));
+        const open = day.slots.filter((s) => s.available).map((s) => ({ start: s.time, label: `${s.label}–${s.endLabel}`, ...(s.priceCents ? { price_change: `${s.priceCents > 0 ? '+' : '-'}${money(Math.abs(s.priceCents))} (${s.priceLabel})` } : {}) }));
         return { date: input.date, open_times: open, note: open.length ? undefined : 'Fully booked.' };
       },
     },
@@ -142,11 +150,12 @@ BOUNDARIES
         package_id: { type: 'string', enum: pkgIds() },
         kids: { type: 'integer', minimum: 1 },
         party_date: { type: 'string', description: 'YYYY-MM-DD' },
+        start_time: { type: 'string', description: 'HH:MM 24-hour, if a time is chosen (some start times cost more or less)' },
         add_ons: addOnSchema,
         code: { type: 'string', description: 'Gift card or referral code, if the customer has one' },
       }, required: ['package_id', 'kids', 'party_date'] },
       run(input, ctx) {
-        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), addOns: input.add_ons || {}, code: input.code || undefined };
+        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), time: input.start_time || undefined, addOns: input.add_ons || {}, code: input.code || undefined };
         const q = ctx.checkCode ? ctx.checkCode(args) : svc.quoteFor(args);
         return {
           lines: q.lines.map((l) => `${l.name}${l.qty > 1 ? ` x${l.qty}` : ''}: ${l.totalCents < 0 ? '-' + money(-l.totalCents) : money(l.totalCents)}`),
@@ -175,22 +184,38 @@ BOUNDARIES
         notes: { type: 'string', description: 'Allergies or special requests' },
         theme: { type: 'string', enum: cfg.themes.map((t) => t.id), description: 'Sport theme, if chosen' },
         code: { type: 'string', description: 'Gift card or referral code, if any' },
+        lang: { type: 'string', enum: ['en', 'es'], description: 'Language the customer is chatting in' },
       }, required: ['package_id', 'kids', 'party_date', 'start_time', 'parent_name', 'email', 'phone'] },
       async run(input, ctx) {
         if (ctx.session.bookings.length >= MAX_BOOKINGS) throw new BookingError('Too many bookings from one chat. Offer a staff follow-up instead.');
-        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), addOns: input.add_ons || {}, code: input.code || undefined, email: input.email };
+        const args = { packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), time: String(input.start_time || ''), addOns: input.add_ons || {}, code: input.code || undefined, email: input.email };
         const q = ctx.checkCode ? ctx.checkCode(args) : svc.quoteFor(args);
         const b = svc.create({
           theme: input.theme, code: input.code || undefined,
           packageId: input.package_id, kids: Number(input.kids), partyDate: String(input.party_date || ''), time: String(input.start_time || ''),
           addOns: input.add_ons || {}, parentName: input.parent_name, email: input.email, phone: input.phone,
           childName: input.child_name, childAge: input.child_age, notes: [input.notes, 'Booked through the chat assistant.'].filter(Boolean).join('\n'),
+          source: 'chat', lang: input.lang === 'es' ? 'es' : 'en',
         });
         const url = await ctx.checkout(b, input.code || undefined);
         const due = q.dueTodayCents ?? b.deposit_cents;
         ctx.session.bookings.push(b.ref);
         ctx.actions.push({ type: 'checkout', url, ref: b.ref, label: due <= 0 ? 'View your booking' : b.quote.payInFull ? `Pay ${money(due)} to confirm` : `Pay ${money(due)} deposit to confirm` });
         return { booking_number: b.ref, held_minutes: cfg.payments.holdMinutes, due_now: money(due), paid_by_gift_card: due <= 0, note: 'A payment button is now showing in the chat.' };
+      },
+    },
+    {
+      name: 'join_waitlist',
+      description: 'Put the customer on the waitlist for a full day. They get an email (and a text if they agree) as soon as a time opens. Needs name and email.',
+      input_schema: { type: 'object', properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD' }, package_id: { type: 'string', enum: pkgIds() }, kids: { type: 'integer' },
+        parent_name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, sms_ok: { type: 'boolean', description: 'They agreed to a text message' },
+        lang: { type: 'string', enum: ['en', 'es'] },
+      }, required: ['date', 'parent_name', 'email'] },
+      run(input) {
+        if (!waitlist) throw new BookingError('The waitlist is not available right now. Offer a staff follow-up.');
+        waitlist.join({ date: input.date, packageId: input.package_id, kids: input.kids, parentName: input.parent_name, email: input.email, phone: input.phone, smsOptIn: !!input.sms_ok, lang: input.lang });
+        return { ok: true, note: 'They will get an email as soon as a time opens that day. First to book gets it.' };
       },
     },
     {

@@ -10,6 +10,16 @@
   var API = '';
   try { if (script && script.src) API = new URL(script.src).origin; } catch (e) {}
   var inline = document.getElementById('nxgs-chat-page');
+  var BIZ = 'NXGS';
+  // Our pages load i18n.js (English/Spanish); on other sites the widget falls back to English.
+  var EN = { chatPlan: 'Plan a party', chatWith: 'Chat with {0}', chatAi: 'Virtual assistant · AI', chatType: 'Type a message…', chatSend: 'Send', chatClose: 'Close chat',
+    chatNote: 'You’re chatting with {0}, {1}’s AI assistant. A team member can follow up anytime; just ask.', chatHi: 'Hi! I’m {0} 👋 I can check open dates, answer questions about parties at {1}, and book your party right here. What are you celebrating?',
+    chatChips: ['Book a birthday party', 'What are the prices?', 'Is this Saturday open?', 'Corporate or team event'], chatSecure: 'Secure checkout · booking {0}', chatDown: 'Chat is not available right now. Please use the booking form.', chatError: 'Sorry, I couldn’t reach the server. Please try again.' };
+  function T(k) {
+    if (window.NXI18N) return NXI18N.t.apply(null, arguments);
+    var s = EN[k], a = Array.prototype.slice.call(arguments, 1);
+    return typeof s === 'string' ? s.replace(/\{(\d)\}/g, function (_, i) { return a[i] !== undefined ? a[i] : ''; }) : s;
+  }
 
   var css = `
   .nxc, .nxc * { box-sizing: border-box; }
@@ -64,7 +74,7 @@
 
   fetch(API + '/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
     if (!cfg.assistant || !cfg.assistant.enabled) {
-      if (inline) inline.textContent = 'Chat is not available right now. Please use the booking form.';
+      if (inline) inline.textContent = T('chatDown');
       return;
     }
     start(cfg);
@@ -72,6 +82,7 @@
 
   function start(cfg) {
     var name = cfg.assistant.name || 'Riley';
+    BIZ = (cfg.business && (cfg.business.shortName || cfg.business.name)) || BIZ;
     var style = el('style'); style.textContent = css; document.head.appendChild(style);
     var root = el('div', 'nxc');
     var saved = store.get() || {};
@@ -81,24 +92,24 @@
 
     var bubble = el('button', 'nxc-bubble');
     bubble.type = 'button';
-    bubble.setAttribute('aria-label', 'Chat with ' + name + ', the NXGS virtual assistant');
+    bubble.setAttribute('aria-label', T('chatWith', name));
     var bav = el('span', 'nxc-av', name[0]);
-    bubble.append(bav, el('span', '', 'Plan a party'));
+    bubble.append(bav, el('span', '', T('chatPlan')));
 
     var panel = el('section', 'nxc-panel' + (inline ? ' nxc-inline' : ''));
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', 'Chat with ' + name);
+    panel.setAttribute('aria-label', T('chatWith', name));
     var head = el('div', 'nxc-head');
     var who = el('div', 'nxc-who');
-    who.append(el('b', '', name + ' · NXGS'), el('span', '', 'Virtual assistant · AI'));
-    var x = el('button', 'nxc-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close chat');
+    who.append(el('b', '', name + ' · ' + BIZ), el('span', '', T('chatAi')));
+    var x = el('button', 'nxc-x', '×'); x.type = 'button'; x.setAttribute('aria-label', T('chatClose'));
     head.append(el('div', 'nxc-av', name[0]), who);
     if (!inline) head.append(x);
     var log = el('div', 'nxc-log'); log.setAttribute('aria-live', 'polite');
     var chips = el('div', 'nxc-chips');
     var form = el('form', 'nxc-form');
-    var input = el('textarea', 'nxc-in'); input.rows = 1; input.placeholder = 'Type a message…'; input.setAttribute('aria-label', 'Message'); input.maxLength = 1000;
-    var send = el('button', 'nxc-send', '➤'); send.type = 'submit'; send.setAttribute('aria-label', 'Send');
+    var input = el('textarea', 'nxc-in'); input.rows = 1; input.placeholder = T('chatType'); input.setAttribute('aria-label', 'Message'); input.maxLength = 1000;
+    var send = el('button', 'nxc-send', '➤'); send.type = 'submit'; send.setAttribute('aria-label', T('chatSend'));
     form.append(input, send);
     panel.append(head, log, chips, form);
 
@@ -115,17 +126,17 @@
       var link = el('a', 'nxc-pay', a.label + ' →');
       link.href = a.url; link.target = '_top'; link.rel = 'noopener';
       log.appendChild(link);
-      log.appendChild(el('div', 'nxc-note', 'Secure checkout · booking ' + a.ref));
+      log.appendChild(el('div', 'nxc-note', T('chatSecure', a.ref)));
       scroll();
     }
     function render() {
       log.textContent = '';
-      log.appendChild(el('div', 'nxc-note', 'You’re chatting with ' + name + ', NXGS’s AI assistant. A team member can follow up anytime; just ask.'));
-      addMsg('assistant', 'Hi! I’m ' + name + ' 👋 I can check open dates, answer questions about parties at NXGS, and book your party right here. What are you celebrating?');
+      log.appendChild(el('div', 'nxc-note', T('chatNote', name, BIZ)));
+      addMsg('assistant', T('chatHi', name, BIZ));
       history.forEach(function (h) { addMsg(h.role, h.text); (h.actions || []).forEach(addAction); });
       chips.textContent = '';
       chips.hidden = history.length > 0;
-      ['Book a birthday party', 'What are the prices?', 'Is this Saturday open?', 'Corporate or team event'].forEach(function (c) {
+      T('chatChips').forEach(function (c) {
         var b = el('button', 'nxc-chip', c); b.type = 'button';
         b.onclick = function () { sendMsg(c); };
         chips.appendChild(b);
@@ -166,7 +177,7 @@
         })
         .catch(function (e) {
           typing.remove();
-          addMsg('assistant', e.message || 'Sorry, I couldn’t reach the server. Please try again.');
+          addMsg('assistant', e.message || T('chatError'));
         })
         .then(function () { busy = false; send.disabled = false; input.focus(); });
     }

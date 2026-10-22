@@ -191,3 +191,41 @@ body.embedded .hero { display: none; }
 .sponsor small { color: var(--muted); font-size: .72rem; }
 .sponsor-strip.foot { margin: 16px 0 0; }
 .receipt .note-row { background: #fff6e5; color: #7a4b00; font-size: .9em; padding: 8px 10px; border-radius: 6px; }
+
+/* ---------- shared: language switch, hidden headings ---------- */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.topline .lang-switch, main > .lang-switch { margin-left: auto; }
+.lang-switch { background: var(--card); color: var(--brand); border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; font: 600 .88rem inherit; cursor: pointer; }
+.lang-switch:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ---------- booking page additions ---------- */
+.hero .tour-btn { position: absolute; left: 12px; bottom: 12px; background: rgb(0 0 0 / .6); color: #fff; border: 0; border-radius: 99px; padding: 8px 14px; font: 600 .9rem inherit; cursor: pointer; }
+.thumbs { display: flex; gap: 6px; overflow-x: auto; margin: -10px 0 16px; }
+.thumbs button { flex: none; width: 72px; height: 48px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--line); }
+.thumbs button:focus-visible { border-color: var(--brand); }
+.thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tour .video { position: relative; aspect-ratio: 16 / 9; }
+.tour .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 10px; }
+dialog.tour { width: min(860px, calc(100vw - 24px)); }
+.compare { margin: 0 0 12px; }
+.compare summary { cursor: pointer; font-weight: 600; color: var(--brand); }
+.compare-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .92rem; }
+.compare-table th, .compare-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.compare-table td:first-child, .compare-table th:first-child { text-align: left; }
+.compare-table .on { background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.slot em { display: block; font-style: normal; font-size: .72rem; font-weight: 700; margin-top: 2px; }
+.slot em.up { color: var(--warn); } .slot em.down { color: var(--ok); }
+.slot[aria-pressed="true"] em { color: var(--brand-ink); }
+.waitbox { margin-top: 12px; border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; }
+.waitbox summary { cursor: pointer; font-weight: 600; color: var(--brand); }
+.upgrade { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; }
+.receipt .ok-row { background: var(--ok-bg); color: var(--ok); }
+details.faq { border-bottom: 1px solid var(--line); padding: 10px 0; }
+details.faq summary { cursor: pointer; font-weight: 600; }
+details.faq p { margin: 8px 0 0; }
+.insta { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.insta blockquote { margin: 0; }
+.pass { text-align: center; }
+.pass svg, .pass img { width: min(220px, 70vw); height: auto; background: #fff; padding: 10px; border-radius: 12px; }
+.topline #langBox { margin-left: auto; }

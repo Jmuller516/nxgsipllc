@@ -1,4 +1,5 @@
 const config = require('./config');
+const scheduling = require('./scheduling');
 
 class PricingError extends Error {}
 
@@ -46,6 +47,10 @@ function quote(input, cfg = config) {
     lines.push({ id: addOn.id, name: addOn.name, qty, unitCents: addOn.priceCents, taxable: addOn.taxable, kind: 'addon', vendor: addOn.vendor, costCents: addOn.costCents });
   }
 
+  // Peak / off-peak price for the chosen start time.
+  const timing = input.time ? timeRule(cfg, input.partyDate, scheduling.toMinutes(String(input.time))) : null;
+  if (timing) lines.push({ id: `time-${timing.id}`, name: timing.label, qty: 1, unitCents: timing.adjustCents, taxable: true, kind: 'timing' });
+
   // A discount (e.g. a referral code) comes off before tax.
   if (input.discount && input.discount.cents > 0) {
     const before = lines.reduce((s, l) => s + l.unitCents * l.qty, 0);
@@ -75,6 +80,14 @@ function quote(input, cfg = config) {
   return { packageId: pkg.id, packageName: pkg.name, phases, shirtsIncluded, notes, minutes: phases.reduce((s, p) => s + p.minutes, 0), kids, lines, subtotalCents, taxCents, totalCents, depositCents, balanceCents, balanceDueDate, payInFull };
 }
 
+/** The peak/off-peak rule for a party starting at startMin on dateYmd, or null. */
+function timeRule(cfg, dateYmd, startMin) {
+  if (!Number.isFinite(startMin) || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateYmd || ''))) return null;
+  const dow = new Date(`${dateYmd}T12:00:00Z`).getUTCDay();
+  return (cfg.timePricing || []).find((r) => r.active !== false && r.adjustCents && r.days.includes(dow)
+    && startMin >= scheduling.toMinutes(r.from) && startMin < scheduling.toMinutes(r.to)) || null;
+}
+
 function daysBetween(fromYmd, toYmd) {
   const a = Date.UTC(...ymd(fromYmd));
   const b = Date.UTC(...ymd(toYmd));
@@ -97,4 +110,4 @@ function money(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-module.exports = { quote, daysBetween, addDays, money, PricingError };
+module.exports = { quote, timeRule, daysBetween, addDays, money, PricingError };

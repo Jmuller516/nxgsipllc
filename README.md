@@ -60,6 +60,24 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - **Settings tab**: connect QuickBooks Online. Every payment (Stripe or desk) becomes a Sales Receipt under the customer.
 - CSV exports for bookings and payments. The payments CSV is laid out for QuickBooks Online import.
 
+### Home page, growth and staff tools
+
+- **Home page** (`/`): Sports / Events / Parties in big stadium lettering over the facility photos. Each word swaps the photo and leads to its section; the booking page moved to `/book`.
+- **English and Spanish** on the home, booking, party, invitation, waiver and calendar pages, the chat assistant, and customer emails and texts. The family's choice is remembered. Staff pages stay in English. Spanish waiver text is used only once staff paste an attorney-approved one (Settings).
+- **Compare packages** table and a **"Make it bigger?"** upgrade suggestion at checkout. Upgrades are tracked.
+- **Peak / off-peak start times** (Pricing tab): weekend midday starts cost more, Friday evenings cost less. The price shows on each start-time button.
+- **Waitlist**: when a day is full, families join from the booking page (or through the chat). When a time opens (cancellation, expired hold, a moved party, a reopened closure) everyone waiting for that day is emailed, and texted if they agreed.
+- **"Your time is still open" email** a few hours after an unpaid hold runs out, with their package, kids and extras pre-filled.
+- **Guest family offers**: an unticked-by-default checkbox on RSVPs, waivers and bookings. Two days after a party, guest families who said yes get a "your turn to celebrate" email with the host's referral code. Every one has an unsubscribe link; the list downloads as CSV (Waitlist & offers tab).
+- **Highlight video** add-on: staff paste the link on the booking and the family is emailed.
+- **Door check-in** (`/admin/checkin`): tap guests in on a tablet, or scan the check-in pass (QR code) each guest gets after RSVPing with any phone camera.
+- **Party timer** (`/admin/timer`): live countdown for every party and which room each is in, with a 5-minute warning and an optional chime. "Practice from" runs a pretend clock for training.
+- **Self-serve changes**: families move their party once, up to 7 days before, from their party page. They can cancel online, and anything over the deposit is refunded if it's 14+ days out (`changes` in src/config.js). Card refunds go back through Stripe automatically; anything else shows as "refund owed" for staff.
+- **Website tab**: real photos (replacing the renderings), a video tour link, the FAQ (shown on the booking page and used by the chat assistant), and Instagram posts.
+- **Search page** at `/birthday-parties` (Spanish: `/fiestas-de-cumpleanos`), with Google-readable business, price and FAQ data, plus `/sitemap.xml` and `/robots.txt`. "Copy HTML for WordPress" puts the same content on nxgs.net.
+- **Insights tab**: revenue by package, add-on pick rates, when parties happen, how much open time is used, where bookings come from, and what each program (chat, waitlist, emails, offers, upgrades) brought in.
+- **Setup tab**: facility name, brand colors, logo, locations and party hours, plus a launch checklist. This is how another facility makes the app its own: each facility runs its own copy and fills in Setup and Pricing; no code changes.
+
 ## Change prices, hours and packages
 
 **Prices are starting points.** Change them anytime from the admin **Pricing** tab. New bookings use the new prices immediately, and parties already booked keep the price they were quoted.

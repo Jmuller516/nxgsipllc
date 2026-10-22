@@ -70,13 +70,17 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
 
   function availability(dateYmd, locationId = null, packageId = null) {
     validateDate(dateYmd);
-    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd, null, locationId), locCfg(locationId), blocksFor(dateYmd, locationId), packageId ? phasesFor(packageId) : null));
+    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd, null, locationId), locCfg(locationId), blocksFor(dateYmd, locationId), packageId ? phasesFor(packageId) : null), dateYmd);
   }
 
   // Customers only see whether a time is open — never why (no names, no "game room booked").
-  function publicSlots(day) {
+  // Each slot also carries its peak/off-peak price change, if any.
+  function publicSlots(day, dateYmd) {
     const { closedReason, ...rest } = day;
-    return { ...rest, slots: day.slots.map(({ reason, ...s }) => s) };
+    return { ...rest, slots: day.slots.map(({ reason, ...s }) => {
+      const r = pricing.timeRule(cfg, dateYmd, s.start);
+      return r ? { ...s, priceCents: r.adjustCents, priceLabel: r.label } : s;
+    }) };
   }
 
   /**
@@ -134,7 +138,9 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
   }
 
   function removeBlock(id) {
+    const k = db.prepare('SELECT block_date, location_id FROM blocks WHERE id = ?').get(id);
     db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
+    if (k) fire('onSlotOpened', k.block_date, k.location_id);
   }
 
   /** A referral code from a family that already booked, or null. */
@@ -184,13 +190,15 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
       const info = db.prepare(`
         INSERT INTO bookings (ref, token, status, party_date, start_min, package_id, kids, child_name, child_age,
           parent_name, email, phone, notes, quote_json, total_cents, deposit_cents, balance_due_date, hold_expires_at,
-          invite_token, theme, sms_opt_in, referred_by, location_id)
-        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          invite_token, theme, sms_opt_in, referred_by, location_id, source, lang, upgraded_from)
+        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(ref, token, input.partyDate, start, q.packageId, q.kids,
         clean(input.childName), input.childAge ? Number(input.childAge) : null,
         clean(input.parentName), clean(input.email).toLowerCase(), clean(input.phone), clean(input.notes),
         JSON.stringify(q), q.totalCents, q.depositCents, q.balanceDueDate, holdExpires,
-        inviteToken, theme, input.smsOptIn ? 1 : 0, q.referral ? q.referral.bookingId : null, locId);
+        inviteToken, theme, input.smsOptIn ? 1 : 0, q.referral ? q.referral.bookingId : null, locId,
+        cleanSource(input.source), langOf(input.lang),
+        cfg.packages.some((p) => p.id === input.upgradedFrom && p.id !== q.packageId) ? input.upgradedFrom : null);
       db.exec('COMMIT');
       return get(Number(info.lastInsertRowid));
     } catch (e) {
@@ -260,6 +268,111 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
       .run(`Cancelled: ${reason || 'no reason given'}`, bookingId);
     fire('onCancel', bookingId);
     return get(bookingId);
+  }
+
+  // ---- Changes families make themselves (booking page) ----
+  const ch = () => cfg.changes || { rescheduleMinDays: 7, freeReschedules: 1, cancelRefundMinDays: 14 };
+  const daysOut = (b) => pricing.daysBetween(todayLocal(clock(), cfg.business.timezone), b.party_date);
+
+  /** Can the family move this party online? { ok, reason } */
+  function canReschedule(b) {
+    if (!['confirmed', 'paid'].includes(b.status)) return { ok: false, reason: 'Only confirmed parties can be moved.' };
+    if (daysOut(b) < ch().rescheduleMinDays) return { ok: false, reason: `Online changes close ${ch().rescheduleMinDays} days before the party. Please contact us and we'll do our best.` };
+    if (b.reschedule_count >= ch().freeReschedules) return { ok: false, reason: "You've already moved this party once. Please contact us to change it again." };
+    return { ok: true };
+  }
+
+  /** Open start times on a new date for this party (its own current time counts as free). */
+  function rescheduleTimes(bookingId, dateYmd) {
+    const b = get(bookingId);
+    validateDate(dateYmd);
+    return publicSlots(scheduling.slotsForDate(dateYmd, takenStarts(dateYmd, b.id, b.location_id), locCfg(b.location_id), blocksFor(dateYmd, b.location_id), bookingPhases(b)), dateYmd);
+  }
+
+  /** The same party (package, kids, add-ons, discount) re-priced for a new date and time. */
+  function requote(b, dateYmd, time) {
+    const addOns = {};
+    for (const l of b.quote.lines.filter((x) => x.kind === 'addon')) addOns[l.id] = l.qty;
+    const today = validateDate(dateYmd);
+    // Rush shirt printing only applies inside the print window; drop it if the new date doesn't need it.
+    const rush = cfg.addOns.find((a) => a.id === 'shirt-rush');
+    if (addOns['shirt-rush'] && rush?.onlyWithinDays && pricing.daysBetween(today, dateYmd) >= rush.onlyWithinDays) delete addOns['shirt-rush'];
+    const d = b.quote.lines.find((x) => x.kind === 'discount');
+    return pricing.quote({ packageId: b.package_id, kids: b.kids, partyDate: dateYmd, time, today, addOns,
+      discount: d ? { cents: -d.unitCents, label: d.name, code: d.code } : null }, cfg);
+  }
+
+  /**
+   * Move a party to a new date/time. Staff can pass { staff: true } to skip the online limits.
+   * Returns the updated booking plus overpaidCents if the new price is lower than what's been paid.
+   */
+  function reschedule(bookingId, { date, time }, { staff = false } = {}) {
+    const b = get(bookingId);
+    if (!b) throw new BookingError('Booking not found.');
+    if (!staff) { const c = canReschedule(b); if (!c.ok) throw new BookingError(c.reason); }
+    else if (!['confirmed', 'paid', 'pending'].includes(b.status)) throw new BookingError('This booking is no longer active.');
+    const start = scheduling.toMinutes(String(time || ''));
+    if (!Number.isFinite(start)) throw new BookingError('Please choose a start time.');
+    if (date === b.party_date && start === b.start_min) throw new BookingError("That's the time you already have.");
+    const q = requote(b, String(date || ''), String(time));
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const day = scheduling.slotsForDate(date, takenStarts(date, b.id, b.location_id), locCfg(b.location_id), blocksFor(date, b.location_id), bookingPhases(b));
+      const slot = day.open && day.slots.find((s) => s.start === start);
+      if (!slot) throw new BookingError("We don't run parties at that time. Please pick another.");
+      if (!slot.available) throw new BookingError('Sorry, that time was just taken. Please pick another.');
+      const today = todayLocal(clock(), cfg.business.timezone);
+      const balanceDue = q.balanceDueDate || today;
+      const status = b.status === 'pending' ? 'pending' : b.paid_cents >= q.totalCents ? 'paid' : 'confirmed';
+      db.prepare(`UPDATE bookings SET party_date = ?, start_min = ?, quote_json = ?, total_cents = ?, balance_due_date = ?, status = ?,
+          reschedule_count = reschedule_count + ?, notes = COALESCE(notes || char(10), '') || ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(date, start, JSON.stringify(q), q.totalCents, balanceDue, status, staff ? 0 : 1,
+          `Moved from ${b.party_date} ${b.timeLabel} by ${staff ? 'staff' : 'the customer'}`, b.id);
+      db.exec('COMMIT');
+    } catch (e) {
+      if (db.isTransaction) db.exec('ROLLBACK');
+      throw e;
+    }
+    const nb = get(b.id);
+    const overpaidCents = Math.max(0, nb.paid_cents - nb.total_cents);
+    fire('onReschedule', nb, { fromDate: b.party_date, fromTime: b.timeLabel, overpaidCents, staff });
+    return { booking: nb, overpaidCents };
+  }
+
+  /** What cancelling now would mean for this family. */
+  function cancelTerms(b) {
+    const allowed = ['confirmed', 'paid'].includes(b.status) && daysOut(b) >= 0;
+    const refundable = daysOut(b) >= ch().cancelRefundMinDays;
+    return { allowed, refundCents: allowed && refundable ? Math.max(0, b.paid_cents - b.deposit_cents) : 0, refundMinDays: ch().cancelRefundMinDays, depositCents: Math.min(b.deposit_cents, b.paid_cents) };
+  }
+
+  function customerCancel(bookingId, reason) {
+    const b = get(bookingId);
+    const t = cancelTerms(b);
+    if (!t.allowed) throw new BookingError('This party can no longer be cancelled online. Please contact us.');
+    db.prepare('UPDATE bookings SET refund_due_cents = ? WHERE id = ?').run(t.refundCents, b.id);
+    const out = cancel(b.id, `by the customer${reason ? ': ' + String(reason).slice(0, 300) : ''}`);
+    fire('onCustomerCancel', out, t);
+    return out;
+  }
+
+  /** Money sent back to the family (Stripe or by hand). Lowers what's owed back and what's been paid. */
+  function recordRefund(bookingId, { amountCents, method, paymentIntent = null, note = null }) {
+    if (!Number.isInteger(amountCents) || amountCents <= 0) throw new BookingError('Invalid refund amount.');
+    db.prepare(`INSERT INTO payments (booking_id, kind, method, amount_cents, stripe_payment_intent, note) VALUES (?, 'refund', ?, ?, ?, ?)`)
+      .run(bookingId, method, -amountCents, paymentIntent, note);
+    db.prepare(`UPDATE bookings SET paid_cents = paid_cents - ?, refund_due_cents = MAX(0, refund_due_cents - ?), updated_at = datetime('now') WHERE id = ?`).run(amountCents, amountCents, bookingId);
+    return get(bookingId);
+  }
+
+  /** Link to the party highlight video (sent to the family). */
+  function setVideo(bookingId, url) {
+    const u = String(url || '').trim();
+    if (u && !/^https:\/\/[^\s]+$/i.test(u)) throw new BookingError('Paste a full https:// link to the video.');
+    db.prepare(`UPDATE bookings SET video_url = ?, updated_at = datetime('now') WHERE id = ?`).run(u || null, bookingId);
+    const b = get(bookingId);
+    if (u) fire('onVideo', b);
+    return b;
   }
 
   /** Mark unpaid holds past their time as expired so they free the slot. */
@@ -367,7 +480,7 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
       timeLabel: scheduling.label12(b.start_min),
       endMin: b.start_min + scheduling.partyMinutes(cfg, bookingPhases(b)),
       endLabel: scheduling.label12(b.start_min + scheduling.partyMinutes(cfg, bookingPhases(b))),
-      schedule: scheduling.windowsFor(b.start_min, locCfg(b.location_id), bookingPhases(b)).phases.map((p) => ({ label: p.label, from: scheduling.label12(p.start), to: scheduling.label12(p.end) })),
+      schedule: scheduling.windowsFor(b.start_min, locCfg(b.location_id), bookingPhases(b)).phases.map((p) => ({ key: p.key, label: p.label, from: scheduling.label12(p.start), to: scheduling.label12(p.end), start: p.start, end: p.end })),
       balanceCents,
       balanceOverdue: balanceCents > 0 && b.status === 'confirmed' && b.balance_due_date && b.balance_due_date < today,
     };
@@ -428,7 +541,17 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   }
 
-  return { phasesFor, location, locCfg, findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+  return { canReschedule, rescheduleTimes, reschedule, cancelTerms, customerCancel, recordRefund, setVideo, bookingPhases, todayLocal: () => todayLocal(clock(), cfg.business.timezone), validateDate,
+    phasesFor, location, locCfg, findReferral, getByInvite, saveDetails, setHost, detailsStatus, calendarMonth, adminMonth, addBlock, removeBlock, availability, quoteFor, create, get, getByRef, recordPayment, cancel, expireHolds, list, payments, summary, createLead, listLeads, updateLead, takenStarts };
+}
+
+/** Where a booking came from, for the Insights tab: web, chat, waitlist, recovery, instagram... */
+function cleanSource(v) {
+  const s = String(v || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30);
+  return s || 'web';
+}
+function langOf(v) {
+  return (config.languages || ['en']).includes(v) ? v : 'en';
 }
 
 function clean(v) {

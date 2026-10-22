@@ -9,13 +9,16 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Next Generation Sports Complex</p>
-  <h1>Participant waiver</h1>
-  <p class="muted">One waiver per child. It stays on file for a year, so you won’t need to sign again for every visit.</p>
+  <div class="topline"><p class="eyebrow" style="margin:0">Next Generation Sports Complex</p><span id="langBox"></span></div>
+  <h1 id="wTitle">Participant waiver</h1>
+  <p class="muted" id="wIntro">One waiver per child. It stays on file for a year, so you won’t need to sign again for every visit.</p>
   <div class="card" id="mount"></div>
 </main>
+<script src="/static/i18n.js"></script>
 <script src="/static/waiver.js"></script>
 <script>
+NXI18N.toggle(document.getElementById('langBox'));
+if (NXI18N.lang === 'es') { document.getElementById('wTitle').textContent = 'Exención del participante'; document.getElementById('wIntro').textContent = 'Una exención por niño. Queda archivada por un año, así que no tiene que firmar en cada visita.'; }
   const q = new URLSearchParams(location.search);
   if (q.get('embed')) document.body.classList.add('embedded');
   function start(prefill) {
@@ -24,7 +27,7 @@
       prefill,
       onDone: (r) => {
         const m = document.getElementById('mount');
-        m.innerHTML = `<h2 style="margin-top:0">Thank you!</h2><p class="banner ok">✓ Waiver signed for ${r.childName.replace(/[&<>"']/g, '')}.</p><div class="actions"><button class="btn" id="again">Sign for another child</button></div>`;
+        m.innerHTML = `<h2 style="margin-top:0">${NXI18N.t('thankYou')}</h2><p class="banner ok">${NXI18N.t('waiverSigned', r.childName.replace(/[&<>"']/g, ''))}</p><div class="actions"><button class="btn" id="again">${NXI18N.lang === 'es' ? 'Firmar por otro niño' : 'Sign for another child'}</button></div>`;
         document.getElementById('again').onclick = () => start({});
         m.scrollIntoView({ block: 'start' });
       },

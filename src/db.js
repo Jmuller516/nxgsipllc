@@ -287,7 +287,60 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
     );
   `);
 
+  db.exec(`
+    -- Families waiting for a full day to open up.
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id     TEXT NOT NULL,
+      party_date      TEXT NOT NULL,
+      package_id      TEXT,
+      kids            INTEGER,
+      parent_name     TEXT NOT NULL,
+      email           TEXT NOT NULL,
+      phone           TEXT,
+      sms_opt_in      INTEGER NOT NULL DEFAULT 0,
+      lang            TEXT NOT NULL DEFAULT 'en',
+      status          TEXT NOT NULL DEFAULT 'waiting', -- waiting | notified | booked | removed
+      notified_at     TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_waitlist_date ON waitlist(location_id, party_date, status);
+
+    -- Families who said yes to hearing about camps, clinics and party offers.
+    CREATE TABLE IF NOT EXISTS contacts (
+      email           TEXT PRIMARY KEY,
+      name            TEXT,
+      child_name      TEXT,
+      phone           TEXT,
+      source          TEXT NOT NULL,             -- rsvp | waiver | booking
+      booking_id      INTEGER,                   -- the party they came to (guests) or booked (parents)
+      lang            TEXT NOT NULL DEFAULT 'en',
+      opted_in_at     TEXT NOT NULL,
+      unsubscribed_at TEXT,
+      last_offer_at   TEXT
+    );
+
+    -- Guests checked in at the door.
+    CREATE TABLE IF NOT EXISTS checkins (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      booking_id      INTEGER NOT NULL REFERENCES bookings(id),
+      child_key       TEXT NOT NULL,             -- lower-cased child name
+      child_name      TEXT NOT NULL,
+      how             TEXT NOT NULL,             -- tap | qr
+      checked_in_at   TEXT NOT NULL,
+      UNIQUE (booking_id, child_key)
+    );
+  `);
+
   // Upgrades for databases created by earlier versions.
+  addColumn(db, 'bookings', 'source', "TEXT NOT NULL DEFAULT 'web'");
+  addColumn(db, 'bookings', 'lang', "TEXT NOT NULL DEFAULT 'en'");
+  addColumn(db, 'bookings', 'upgraded_from', 'TEXT');
+  addColumn(db, 'bookings', 'video_url', 'TEXT');
+  addColumn(db, 'bookings', 'reschedule_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'bookings', 'refund_due_cents', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'rsvps', 'marketing_opt_in', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'waivers', 'marketing_opt_in', 'INTEGER NOT NULL DEFAULT 0');
   addColumn(db, 'bookings', 'theme', 'TEXT');
   addColumn(db, 'bookings', 'host_name', 'TEXT');
   addColumn(db, 'bookings', 'invite_token', 'TEXT');

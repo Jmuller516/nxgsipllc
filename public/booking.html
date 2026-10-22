@@ -3,35 +3,45 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Your NXGS Party</title>
+  <title>Your Party</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
-<main id="app"><p class="muted">Loading your booking…</p></main>
+<main><div class="topline"><span id="langBox"></span></div><div id="app"><p class="muted" data-i18n="loadingBooking"></p></div></main>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/waiver.js"></script>
+<script src="/static/qrcode.js"></script>
 <script>
 const REF = "__BOOKING_REF__";
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get('t') || '';
+const t = NXI18N.t, LANG = NXI18N.lang;
 const $ = (id) => document.getElementById(id);
-const money = (c) => '$' + (c / 100).toFixed(2);
+const money = (c) => (c < 0 ? '−' : '') + '$' + (Math.abs(c) / 100).toFixed(2);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const fmtDate = (d) => NXI18N.date(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 const api = async (path, body) => {
-  const r = await fetch(`/api/bookings/${REF}${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const r = await fetch(`/api/bookings/${REF}${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}&lang=${LANG}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, lang: LANG }) } : {});
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || 'Something went wrong.');
   return d;
 };
 let B, CFG;
 
+/** QR code as an SVG, for the check-in pass. */
+function qrSvg(text) {
+  try { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } catch { return ''; }
+}
+
 async function load() {
+  NXI18N.apply();
+  NXI18N.toggle($('langBox'), (next) => { fetch(`/api/bookings/${REF}/lang?t=${encodeURIComponent(TOKEN)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: next }) }).catch(() => {}); });
   try {
-    [B, CFG] = await Promise.all([api(params.get('session_id') ? `?session_id=${encodeURIComponent(params.get('session_id'))}` : ''), fetch('/api/config').then((r) => r.json())]);
+    [B, CFG] = await Promise.all([api(params.get('session_id') ? `?session_id=${encodeURIComponent(params.get('session_id'))}` : ''), fetch('/api/config?lang=' + LANG).then((r) => r.json())]);
   } catch (e) {
-    $('app').innerHTML = '<div class="card"><h1>Booking not found</h1><p>Please use the link from your confirmation email, or contact us.</p></div>';
+    $('app').innerHTML = `<div class="card"><h1>${t('notFound')}</h1><p>${t('notFoundHint')}</p></div>`;
     return;
   }
   render();
@@ -41,125 +51,144 @@ async function load() {
 
 function render() {
   const active = ['confirmed', 'paid'].includes(B.status);
-  const statusText = {
-    pending: 'Waiting for payment. Your time is held for a short while.',
-    confirmed: 'Confirmed. Deposit received.',
-    paid: 'Confirmed. Paid in full.',
-    cancelled: 'Cancelled.',
-    expired: 'This hold expired before payment. Please book again or contact us.',
-  }[B.status];
   const st = B.detailsStatus;
   const invite = B.inviteToken ? `${location.origin}/invite/${B.inviteToken}` : null;
   const g = B.guests;
+  const ch = B.changes;
 
   $('app').innerHTML = `
-    <figure class="hero"><img src="/static/img/lobby.jpg" alt="NXGS front desk and lobby"><figcaption>Rendering · NXGS Farmingdale</figcaption></figure>
-    ${params.get('paid') ? '<p class="banner ok">Payment received. Thank you!</p>' : ''}
-    <p class="eyebrow">${esc(CFG.business.name)} · Booking ${esc(B.ref)}</p>
-    <h1>${B.themeInfo ? B.themeInfo.emoji + ' ' : ''}${B.childName ? `${esc(B.childName)}’s party` : 'Your party'}</h1>
-    <p class="status status-${esc(B.status)}">${esc(statusText)}</p>
+    <figure class="hero"><img src="/static/img/lobby.jpg" alt=""><figcaption>${t('rendering')} · ${esc(B.location.name)}</figcaption></figure>
+    ${params.get('paid') ? `<p class="banner ok">${t('paymentReceived')}</p>` : ''}
+    <p class="eyebrow">${esc(CFG.business.name)} · ${esc(t('bookingN', B.ref))}</p>
+    <h1>${B.themeInfo ? B.themeInfo.emoji + ' ' : ''}${B.childName ? esc(t('partyOf', B.childName)) : t('yourParty')}</h1>
+    <p class="status status-${esc(B.status)}">${esc(t('st_' + B.status))}</p>
+    ${B.refundDueCents > 0 ? `<p class="banner">${esc(t('refundNote', money(B.refundDueCents)))}</p>` : ''}
 
     <div class="card">
       <dl class="facts" style="margin-top:0">
-        <dt>Where</dt><dd>${esc(B.location.name)}<br><span class="muted" style="font-weight:400">${esc(B.location.address)}</span></dd>
-        <dt>Date</dt><dd>${esc(fmtDate(B.partyDate))}</dd>
-        <dt>Time</dt><dd>${esc(B.timeLabel)} – ${esc(B.endLabel)}</dd>
-        <dt>Package</dt><dd>${esc(B.packageName)}</dd>
-        <dt>Kids</dt><dd>${B.kids}</dd>
-        ${B.themeInfo ? `<dt>Theme</dt><dd>${B.themeInfo.emoji} ${esc(B.themeInfo.name)}</dd>` : ''}
+        <dt>${t('where')}</dt><dd>${esc(B.location.name)}<br><span class="muted" style="font-weight:400">${esc(B.location.address)}</span></dd>
+        <dt>${t('date')}</dt><dd>${esc(fmtDate(B.partyDate))}</dd>
+        <dt>${t('time')}</dt><dd>${esc(B.timeLabel)} – ${esc(B.endLabel)}</dd>
+        <dt>${t('package')}</dt><dd>${esc(B.packageName)}</dd>
+        <dt>${t('kids')}</dt><dd>${B.kids}</dd>
+        ${B.themeInfo ? `<dt>${t('theme')}</dt><dd>${B.themeInfo.emoji} ${esc(B.themeInfo.name)}</dd>` : ''}
       </dl>
-      <h2>Schedule</h2>
+      <h2>${t('schedule')}</h2>
       <ul class="schedule">${B.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
     </div>
 
+    ${B.videoUrl ? `<div class="card"><h2 style="margin-top:0">🎬 ${t('videoTitle')}</h2><a class="btn" href="${esc(B.videoUrl)}" target="_blank" rel="noopener">${t('watchVideo')}</a></div>` : ''}
+
     ${active ? `
     <div class="card" id="details">
-      <div class="card-head"><h2>Party details</h2>${st.complete ? '<span class="badge ok">Complete ✓</span>' : `<span class="badge warn">${st.missing.length} to go</span>`}</div>
-      ${st.complete ? '' : `<p class="muted">Still needed: ${esc(st.missing.join(', '))}.</p>`}
+      <div class="card-head"><h2>${t('partyDetails')}</h2>${st.complete ? `<span class="badge ok">${t('complete')}</span>` : `<span class="badge warn">${esc(t('toGo', st.missing.length))}</span>`}</div>
+      ${st.complete ? '' : `<p class="muted">${esc(t('stillNeeded', st.missing.join(', ')))}</p>`}
       <form id="detailsForm" novalidate>
-        <label for="dTheme">Sport theme</label>
-        <select id="dTheme"><option value="">Choose a theme…</option>${CFG.themes.map((t) => `<option value="${t.id}" ${B.theme === t.id ? 'selected' : ''}>${t.emoji} ${esc(t.name)}</option>`).join('')}</select>
+        <label for="dTheme">${t('themeLabel')}</label>
+        <select id="dTheme"><option value="">${t('chooseTheme')}</option>${CFG.themes.map((x) => `<option value="${x.id}" ${B.theme === x.id ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
         <div class="row">
-          <div><label for="dName">Birthday child’s name <span class="muted">(exact spelling)</span></label><input id="dName" value="${esc(B.childName || '')}"></div>
-          <div><label for="dAge">Turning</label><input id="dAge" type="number" min="1" max="18" inputmode="numeric" value="${esc(B.childAge || '')}"></div>
+          <div><label for="dName">${t('childName')} <span class="muted">${t('exactSpelling')}</span></label><input id="dName" value="${esc(B.childName || '')}"></div>
+          <div><label for="dAge">${t('turning')}</label><input id="dAge" type="number" min="1" max="18" inputmode="numeric" value="${esc(B.childAge || '')}"></div>
         </div>
-        ${st.needs.jerseyNumber ? `<label for="dJersey">Jersey number <span class="muted">(for personalized items)</span></label><input id="dJersey" inputmode="numeric" maxlength="2" value="${esc(B.details.jerseyNumber || '')}" style="max-width:120px">` : ''}
-        ${st.needs.shirtSizes ? `<label>Shirt sizes <span class="muted" id="sizeCount"></span></label>
+        ${st.needs.jerseyNumber ? `<label for="dJersey">${t('jersey')} <span class="muted">${t('jerseyHint')}</span></label><input id="dJersey" inputmode="numeric" maxlength="2" value="${esc(B.details.jerseyNumber || '')}" style="max-width:120px">` : ''}
+        ${st.needs.shirtSizes ? `<label>${t('shirtSizes')} <span class="muted" id="sizeCount"></span></label>
           <div class="sizes">${CFG.shirtSizes.map((z) => `<label>${z}<input type="number" min="0" inputmode="numeric" data-size="${z}" value="${(B.details.shirtSizes || {})[z] || ''}"></label>`).join('')}</div>` : ''}
-        ${st.needs.photo ? `<label for="dPhoto">Photo of the birthday child <span class="muted">(for the scoreboard, poster or favor boxes)</span></label>
-          ${B.details.photo ? `<img class="photo-prev" id="photoPrev" src="${esc(B.details.photo)}" alt="Uploaded photo">` : '<img class="photo-prev hidden" id="photoPrev" alt="Uploaded photo">'}
+        ${st.needs.photo ? `<label for="dPhoto">${t('photo')} <span class="muted">${t('photoHint')}</span></label>
+          ${B.details.photo ? `<img class="photo-prev" id="photoPrev" src="${esc(B.details.photo)}" alt="">` : '<img class="photo-prev hidden" id="photoPrev" alt="">'}
           <input id="dPhoto" type="file" accept="image/jpeg,image/png,image/webp">` : ''}
-        <label for="dAllergies">Food allergies in the group <span class="muted">(write “none” if none)</span></label>
+        <label for="dAllergies">${t('allergies')} <span class="muted">${t('allergiesHint')}</span></label>
         <textarea id="dAllergies" rows="2">${esc(B.details.allergies || '')}</textarea>
-        <label for="dNotes">Anything else? <span class="muted">(optional)</span></label>
+        <label for="dNotes">${t('anythingElse')} <span class="muted">${t('optional')}</span></label>
         <textarea id="dNotes" rows="2">${esc(B.details.extraNotes || '')}</textarea>
         <div id="dMsg" class="hidden"></div>
-        <div class="actions"><button class="btn" type="submit">Save details</button></div>
+        <div class="actions"><button class="btn" type="submit">${t('saveDetails')}</button></div>
       </form>
     </div>
 
     <div class="card" id="invites">
-      <div class="card-head"><h2>Invitations & waivers</h2><span class="badge ${g.missingWaivers.length ? 'warn' : 'ok'}">${g.waiversSigned} of ${g.waiversNeeded} waivers</span></div>
-      <p>Send this link to your guests. They RSVP, list allergies, and sign the waiver online, so check-in is quick.</p>
-      <div class="linkbox"><code id="inviteUrl">${esc(invite)}</code><button class="btn small" id="copyInvite" type="button">Copy</button></div>
+      <div class="card-head"><h2>${t('invitesTitle')}</h2><span class="badge ${g.missingWaivers.length ? 'warn' : 'ok'}">${esc(t('waiversOf', g.waiversSigned, g.waiversNeeded))}</span></div>
+      <p>${t('inviteIntro')}</p>
+      <div class="linkbox"><code id="inviteUrl">${esc(invite)}</code><button class="btn small" id="copyInvite" type="button">${t('copy')}</button></div>
       <div class="actions" style="margin-top:10px">
-        <button class="btn ghost small" id="shareInvite" type="button">Share…</button>
-        <a class="btn ghost small" href="/invite/${esc(B.inviteToken)}" target="_blank" rel="noopener">Preview invitation</a>
+        <button class="btn ghost small" id="shareInvite" type="button">${t('share')}</button>
+        <a class="btn ghost small" href="/invite/${esc(B.inviteToken)}${LANG === 'es' ? '?lang=es' : ''}" target="_blank" rel="noopener">${t('previewInvite')}</a>
       </div>
-      <p><b>${g.yes}</b> coming · ${g.no} can’t make it · ${B.kids} kids booked${g.yes + 1 > B.kids ? ` · <span class="no">More guests than booked kids. Extra kids are ${money(CFG.packages.find((p) => p.id === B.packageId)?.extraKidCents || 2500)} each, settled at check-in.</span>` : ''}</p>
-      ${g.birthdayChild && !g.birthdayChild.waiver ? `<p class="banner">${esc(g.birthdayChild.name)} needs a waiver too. <a href="/waiver?party=${esc(B.inviteToken)}&child=${encodeURIComponent(g.birthdayChild.name)}">Sign it now</a></p>` : ''}
-      ${g.guests.length ? `<div class="scroll"><table class="guest-list"><tr><th>Guest</th><th>Reply</th><th>Allergies</th><th>Waiver</th></tr>
+      <p>${t('comingLine', g.yes, g.no, B.kids)}${g.yes + 1 > B.kids ? ` · <span class="no">${esc(t('moreGuests', money(CFG.packages.find((p) => p.id === B.packageId)?.extraKidCents || 2500)))}</span>` : ''}</p>
+      ${g.birthdayChild && !g.birthdayChild.waiver ? `<p class="banner">${esc(t('needsWaiverToo', g.birthdayChild.name))} <a href="/waiver?party=${esc(B.inviteToken)}&child=${encodeURIComponent(g.birthdayChild.name)}${LANG === 'es' ? '&lang=es' : ''}">${t('signNow')}</a></p>` : ''}
+      ${g.guests.length ? `<div class="scroll"><table class="guest-list"><tr><th>${t('guest')}</th><th>${t('reply')}</th><th>${t('allergiesOr')}</th><th>${t('waiver')}</th></tr>
         ${g.guests.map((x) => `<tr><td><b>${esc(x.childName)}</b><br><span class="muted">${esc(x.parentName)}</span></td>
-          <td class="${x.attending === 'yes' ? 'yes' : 'no'}">${x.attending === 'yes' ? 'Coming' : 'Can’t come'}</td>
-          <td>${esc(x.allergies || '—')}</td><td>${x.attending === 'yes' ? (x.waiver ? '<span class="yes">✓ Signed</span>' : '<span class="no">Not yet</span>') : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No replies yet.</p>'}
-    </div>` : ''}
+          <td class="${x.attending === 'yes' ? 'yes' : 'no'}">${x.attending === 'yes' ? t('comingYes') : t('comingNo')}</td>
+          <td>${esc(x.allergies || '—')}</td><td>${x.attending === 'yes' ? (x.waiver ? `<span class="yes">${t('signed')}</span>` : `<span class="no">${t('notYet')}</span>`) : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${t('noReplies')}</p>`}
+    </div>
+
+    ${B.checkinPass ? `<div class="card pass"><h2 style="margin-top:0">${t('passTitle')}</h2><p class="muted">${esc(t('passBday', B.childName))} · ${t('passIntro')}</p>${qrSvg(`${location.origin}/c/${B.checkinPass}`)}</div>` : ''}` : ''}
 
     <div class="card" id="pay">
-      <h2 style="margin-top:0">Receipt</h2>
+      <h2 style="margin-top:0">${t('receipt')}</h2>
       <table class="receipt">
-        ${B.quote.lines.map((l) => `<tr><td>${esc(l.name)}${l.qty > 1 ? ` × ${l.qty}` : ''}</td><td class="num">${l.totalCents < 0 ? '−' + money(-l.totalCents) : money(l.totalCents)}</td></tr>`).join('')}
-        <tr class="sub"><td>Subtotal</td><td class="num">${money(B.quote.subtotalCents)}</td></tr>
+        ${B.quote.lines.map((l) => `<tr${l.totalCents < 0 ? ' class="yes"' : ''}><td>${esc(l.name)}${l.qty > 1 ? ` × ${l.qty}` : ''}</td><td class="num">${money(l.totalCents)}</td></tr>`).join('')}
+        <tr class="sub"><td>${t('subtotal')}</td><td class="num">${money(B.quote.subtotalCents)}</td></tr>
         <tr><td>${esc(CFG.tax.label)}</td><td class="num">${money(B.quote.taxCents)}</td></tr>
-        <tr class="total"><td>Total</td><td class="num">${money(B.totalCents)}</td></tr>
-        ${B.payments.map((x) => `<tr><td>${esc(x.date)} · ${esc(x.kind)} (${esc(x.method.replace(/_/g, ' '))})</td><td class="num">−${money(x.amountCents)}</td></tr>`).join('')}
-        <tr class="total"><td>Balance</td><td class="num">${money(B.balanceCents)}</td></tr>
+        <tr class="total"><td>${t('total')}</td><td class="num">${money(B.totalCents)}</td></tr>
+        ${B.payments.map((x) => `<tr><td>${esc(x.date)} · ${esc(x.kind)} (${esc(x.method.replace(/_/g, ' '))})</td><td class="num">${x.amountCents < 0 ? '+' + money(-x.amountCents) : '−' + money(x.amountCents)}</td></tr>`).join('')}
+        <tr class="total"><td>${t('balance')}</td><td class="num">${money(B.balanceCents)}</td></tr>
       </table>
       ${B.status === 'confirmed' && B.balanceCents > 0 ? `
-        <p class="muted">Balance due by ${esc(fmtDate(B.balanceDueDate))}.</p>
-        <div class="actions"><button class="btn" id="payBalance">Pay balance ${money(B.balanceCents)}</button></div>
-        <details><summary class="muted" style="cursor:pointer">Use a gift card or party credit</summary>
-          <div class="linkbox" style="margin-top:8px"><input id="giftCode" placeholder="Code, e.g. NXGC-ABCD-EFGH" style="border:0;background:transparent;padding:4px"><button class="btn small" id="applyGift" type="button">Apply</button></div>
+        <p class="muted">${esc(t('balanceDueBy', fmtDate(B.balanceDueDate)))}</p>
+        <div class="actions"><button class="btn" id="payBalance">${esc(t('payBalance', money(B.balanceCents)))}</button></div>
+        <details><summary class="muted" style="cursor:pointer">${t('useGift')}</summary>
+          <div class="linkbox" style="margin-top:8px"><input id="giftCode" placeholder="${esc(t('giftPlaceholder'))}" style="border:0;background:transparent;padding:4px"><button class="btn small" id="applyGift" type="button">${t('apply')}</button></div>
           <p id="giftMsg" class="muted"></p></details>` : ''}
-      <p class="muted">The ${CFG.payments.depositPercent}% deposit is non-refundable.</p>
+      <p class="muted">${esc(t('depositNonRefundable', CFG.payments.depositPercent))}</p>
     </div>
+
+    ${ch ? `
+    <div class="card" id="change">
+      <h2 style="margin-top:0">${t('changeTitle')}</h2>
+      <details ${ch.reschedule.ok ? '' : 'class="muted"'}><summary style="cursor:pointer;font-weight:600">${t('moveTitle')}</summary>
+        ${ch.reschedule.ok ? `<p class="muted">${t('moveIntro')}</p>
+          <label for="mvDate">${t('newDate')}</label><input id="mvDate" type="date">
+          <div class="slots" id="mvSlots" style="margin-top:10px"></div>
+          <div id="mvMsg" class="hidden"></div>
+          <div class="actions"><button class="btn" id="mvGo" type="button" disabled>${t('moveTitle')}</button></div>`
+          : `<p>${esc(ch.reschedule.reason)}</p>`}
+      </details>
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">${t('cancelTitle')}</summary>
+        <p>${ch.cancel.refundCents > 0 ? esc(t('cancelRefund', money(ch.cancel.refundCents), money(ch.cancel.depositCents))) : esc(t('cancelNoRefund', ch.cancel.refundMinDays))}</p>
+        <label for="cxReason">${t('reasonOpt')}</label><input id="cxReason">
+        <label for="cxType">${t('cancelType')}</label><input id="cxType" autocomplete="off" style="max-width:200px">
+        <div id="cxMsg" class="hidden"></div>
+        <div class="actions"><button class="btn danger" id="cxGo" type="button">${t('cancelBtn')}</button></div>
+      </details>
+    </div>` : ''}
 
     ${B.referralCode ? `
     <div class="card">
-      <h2 style="margin-top:0">Share the fun, earn party credit</h2>
-      <p>Give your code to another family. They get <b>${money(CFG.referral.friendDiscountCents)} off</b> their party, and you get <b>${money(CFG.referral.referrerCreditCents)}</b> in party credit when they book.</p>
-      <div class="linkbox"><code class="code-big" id="refCode">${esc(B.referralCode)}</code><button class="btn small" id="copyRef" type="button">Copy</button></div>
+      <h2 style="margin-top:0">${t('shareTitle')}</h2>
+      <p>${t('shareIntro', money(CFG.referral.friendDiscountCents), money(CFG.referral.referrerCreditCents))}</p>
+      <div class="linkbox"><code class="code-big" id="refCode">${esc(B.referralCode)}</code><button class="btn small" id="copyRef" type="button">${t('copy')}</button></div>
     </div>` : ''}
 
     ${B.canReview ? `
     <div class="card" id="review">
-      <h2 style="margin-top:0">How was the party?</h2>
-      ${B.review ? `<p>Thanks for your review! You gave us ${'★'.repeat(B.review.rating)}.</p>` : `
+      <h2 style="margin-top:0">${t('howWas')}</h2>
+      ${B.review ? `<p>${esc(t('thanksReview', '★'.repeat(B.review.rating)))}</p>` : `
       <form id="reviewForm" novalidate>
-        <div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`).join('')}</div>
-        <label for="rComment">Tell us about it <span class="muted">(optional)</span></label><textarea id="rComment" rows="3"></textarea>
-        <label for="rName">Name to show <span class="muted">(e.g. “Dana R.”)</span></label><input id="rName" value="${esc(B.parentFirstName)}">
-        <label class="check"><input type="checkbox" id="rPublish"> NXGS may share my review on its website.</label>
+        <div class="stars" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-label="${n}">★</button>`).join('')}</div>
+        <label for="rComment">${t('tellUs')} <span class="muted">${t('optional')}</span></label><textarea id="rComment" rows="3"></textarea>
+        <label for="rName">${t('nameToShow')} <span class="muted">${t('nameEg')}</span></label><input id="rName" value="${esc(B.parentFirstName)}">
+        <label class="check"><input type="checkbox" id="rPublish"> ${esc(t('mayShare', CFG.business.shortName || CFG.business.name))}</label>
         <div id="rMsg" class="hidden"></div>
-        <div class="actions"><button class="btn" type="submit">Send review</button></div>
+        <div class="actions"><button class="btn" type="submit">${t('sendReview')}</button></div>
       </form>`}
     </div>` : ''}
 
-    <p class="muted">Questions? Email <a href="mailto:${esc(CFG.business.email || 'joseph@nxgs.net')}">${esc(CFG.business.email || 'joseph@nxgs.net')}</a>${CFG.business.phone ? ` or call ${esc(CFG.business.phone)}` : ''}. Keep this page’s link. It’s your receipt and party hub.</p>`;
+    <p class="muted">${t('questions', `<a href="mailto:${esc(CFG.business.email)}">${esc(CFG.business.email)}</a>`, CFG.business.phone ? esc(t('orCall', CFG.business.phone)) : '')}</p>`;
   wire();
 }
 
 function copy(text, btn) {
-  const done = () => { btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = 'Copy'; }, 1800); };
+  const done = () => { btn.textContent = t('copied'); setTimeout(() => { btn.textContent = t('copy'); }, 1800); };
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done);
   else done();
 }
@@ -184,8 +213,8 @@ function wire() {
   if ($('copyInvite')) $('copyInvite').onclick = (e) => copy($('inviteUrl').textContent, e.target);
   if ($('shareInvite')) $('shareInvite').onclick = () => {
     const url = $('inviteUrl').textContent;
-    const text = `You're invited to ${B.childName ? B.childName + "'s" : 'our'} party at NXGS! RSVP and sign the waiver here:`;
-    if (navigator.share) navigator.share({ title: 'Party invitation', text, url }).catch(() => {});
+    const text = t('inviteShareText', B.childName || t('ours'), CFG.business.shortName || CFG.business.name);
+    if (navigator.share) navigator.share({ title: t('youreInvited'), text, url }).catch(() => {});
     else copy(url, $('copyInvite'));
   };
   if ($('copyRef')) $('copyRef').onclick = (e) => copy(B.referralCode, e.target);
@@ -194,7 +223,7 @@ function wire() {
   const updateCount = () => {
     if (!$('sizeCount')) return;
     const n = sizeInputs.reduce((s, i) => s + (Number(i.value) || 0), 0);
-    $('sizeCount').textContent = `(${n} of ${st.needs.shirtSizes})`;
+    $('sizeCount').textContent = `(${n} / ${st.needs.shirtSizes})`;
     $('sizeCount').style.color = n === st.needs.shirtSizes ? 'var(--ok)' : '';
   };
   sizeInputs.forEach((i) => i.addEventListener('input', updateCount)); updateCount();
@@ -209,7 +238,7 @@ function wire() {
   if ($('detailsForm')) $('detailsForm').onsubmit = async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Saving…';
+    btn.disabled = true; btn.textContent = t('saving');
     const body = { theme: $('dTheme').value || undefined, childName: $('dName').value, childAge: $('dAge').value, allergies: $('dAllergies').value, extraNotes: $('dNotes').value };
     if ($('dJersey')) body.jerseyNumber = $('dJersey').value;
     if (sizeInputs.length) body.shirtSizes = Object.fromEntries(sizeInputs.map((i) => [i.dataset.size, Number(i.value) || 0]));
@@ -218,10 +247,10 @@ function wire() {
       B = await api('/details', body);
       render();
       $('details').scrollIntoView({ block: 'start' });
-      const m = $('dMsg'); m.className = 'banner ok'; m.textContent = B.detailsStatus.complete ? 'Saved. Everything we need is in!' : 'Saved.';
+      const m = $('dMsg'); m.className = 'banner ok'; m.textContent = B.detailsStatus.complete ? t('savedAll') : t('saved');
     } catch (err) {
       const m = $('dMsg'); m.className = 'error'; m.textContent = err.message;
-      btn.disabled = false; btn.textContent = 'Save details';
+      btn.disabled = false; btn.textContent = t('saveDetails');
     }
   };
 
@@ -237,6 +266,40 @@ function wire() {
     } catch (err) { $('giftMsg').textContent = err.message; }
   };
 
+  // Move to another date
+  let mvTime = null;
+  if ($('mvDate')) {
+    const min = new Date(); min.setDate(min.getDate() + CFG.minDaysAhead);
+    $('mvDate').min = min.toLocaleDateString('en-CA');
+    $('mvDate').onchange = async () => {
+      mvTime = null; $('mvGo').disabled = true; $('mvMsg').className = 'hidden';
+      try {
+        const day = await api(`/times?date=${$('mvDate').value}`);
+        if (!day.open) { $('mvSlots').innerHTML = ''; $('mvMsg').className = 'muted'; $('mvMsg').textContent = t('noParties'); return; }
+        $('mvSlots').innerHTML = day.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled'}>${s.label}<small>${t('to')} ${s.endLabel}</small>${s.priceCents && s.available ? `<em class="${s.priceCents > 0 ? 'up' : 'down'}">${s.priceCents > 0 ? '+' : '−'}$${Math.abs(s.priceCents / 100)}</em>` : ''}</button>`).join('');
+        $('mvSlots').querySelectorAll('.slot').forEach((b) => b.onclick = () => {
+          $('mvSlots').querySelectorAll('.slot').forEach((x) => x.setAttribute('aria-pressed', x === b));
+          mvTime = b.dataset.time; $('mvGo').disabled = false; $('mvGo').textContent = t('moveBtn', b.firstChild.textContent);
+        });
+      } catch (err) { $('mvMsg').className = 'error'; $('mvMsg').textContent = err.message; }
+    };
+    $('mvGo').onclick = async () => {
+      $('mvGo').disabled = true; $('mvGo').textContent = t('moving');
+      try {
+        B = await api('/reschedule', { date: $('mvDate').value, time: mvTime });
+        render();
+        $('app').insertAdjacentHTML('afterbegin', `<p class="banner ok">${esc(t('moved', fmtDate(B.partyDate), B.timeLabel))}</p>`);
+        window.scrollTo(0, 0);
+      } catch (err) { $('mvMsg').className = 'error'; $('mvMsg').textContent = err.message; $('mvGo').disabled = false; $('mvGo').textContent = t('moveTitle'); }
+    };
+  }
+  // Cancel
+  if ($('cxGo')) $('cxGo').onclick = async () => {
+    $('cxGo').disabled = true; $('cxGo').textContent = t('cancelling');
+    try { B = await api('/cancel', { reason: $('cxReason').value, confirm: $('cxType').value }); render(); window.scrollTo(0, 0); }
+    catch (err) { $('cxMsg').className = 'error'; $('cxMsg').textContent = err.message; $('cxGo').disabled = false; $('cxGo').textContent = t('cancelBtn'); }
+  };
+
   let rating = 0;
   document.querySelectorAll('[data-star]').forEach((s) => s.onclick = () => {
     rating = Number(s.dataset.star);
@@ -246,7 +309,7 @@ function wire() {
     e.preventDefault();
     try {
       const r = await api('/review', { rating, comment: $('rComment').value, displayName: $('rName').value, mayPublish: $('rPublish').checked });
-      $('review').innerHTML = `<h2 style="margin-top:0">Thank you!</h2><p>We really appreciate it.</p>${r.googleReviewUrl ? `<p>Would you also share it on Google? It helps other families find us.</p><a class="btn" href="${esc(r.googleReviewUrl)}" target="_blank" rel="noopener">Review us on Google</a>` : ''}`;
+      $('review').innerHTML = `<h2 style="margin-top:0">${t('thankYou')}</h2><p>${t('appreciate')}</p>${r.googleReviewUrl ? `<p>${t('alsoGoogle')}</p><a class="btn" href="${esc(r.googleReviewUrl)}" target="_blank" rel="noopener">${t('reviewGoogle')}</a>` : ''}`;
     } catch (err) { const m = $('rMsg'); m.className = 'error'; m.textContent = err.message; }
   };
 }

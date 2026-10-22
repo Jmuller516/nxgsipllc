@@ -11,6 +11,7 @@ module.exports = {
     email: 'joseph@nxgs.net',
     timezone: 'America/New_York',
     address: '388 Broad Hollow Rd, Farmingdale, NY 11735',   // main address (Farmingdale)
+    tagline: 'a new indoor sports complex in Farmingdale, NY', // how the chat assistant describes the facility
     phone: null,                  // front desk number shown to customers, e.g. '(516) 555-0100'
   },
 
@@ -105,6 +106,7 @@ module.exports = {
       includes: "30 minutes of field play (1 sport)\n30 minutes in the video game room\n30 minutes in the party room for food, cake and presents\nTables, chairs and setup\nCleanup after the party",
       taxable: true,
       description: '90 minutes: 30 min field play (1 sport), 30 min video game room, 30 min food, cake & presents. Up to 15 kids.',
+      features: { sports: 1, gameRoom: true, pizza: false, host: false, shirts: false, goodieBags: false },
     },
     {
       id: 'allstar',
@@ -120,6 +122,8 @@ module.exports = {
       includes: "2 hours: 60 minutes of field play (2 sports)\n30 minutes in the video game room\n30 minutes in the party room for food, cake and presents\nPizza from Calabria Pizza for the kids\nDrinks for the kids\nA dedicated NXGS party host\nTables, chairs, setup and cleanup",
       taxable: true,
       description: '2 hours: 60 min field play (2 sports), 30 min video game room, 30 min food, cake & presents, plus pizza, drinks and a dedicated party host.',
+      features: { sports: 2, gameRoom: true, pizza: true, host: true, shirts: false, goodieBags: false },
+      upgradePitch: '2 sports, a full 2 hours, pizza and drinks, and a dedicated party host', // shown to Rookie bookers
     },
     {
       id: 'mvp',
@@ -137,8 +141,71 @@ module.exports = {
       description: '2 hours: 60 min field play (3 sports), 30 min video game room, 30 min food, cake & presents, plus pizza, drinks, a party host, a one-color printed shirt for every child (special one for the birthday child) and goodie bags.',
       shirtsForAll: true, // one printed shirt per child; sizes go on the party details form
       shirtLeadDays: 14, // inside this, shirts are only included with the shirt-rush add-on
+      features: { sports: 3, gameRoom: true, pizza: true, host: true, shirts: true, goodieBags: true },
+      upgradePitch: '3 sports, a printed shirt for every child and goodie bags', // shown to All-Star bookers
     },
   ],
+
+  // Rows of the "Compare packages" table on the booking page (values come from each package's features).
+  compareRows: [
+    { key: 'length', label: 'Party length' },
+    { key: 'sports', label: 'Sports during field play' },
+    { key: 'gameRoom', label: 'Video game room' },
+    { key: 'pizza', label: 'Pizza & drinks for the kids' },
+    { key: 'host', label: 'Dedicated party host' },
+    { key: 'shirts', label: 'Printed shirt for every child' },
+    { key: 'goodieBags', label: 'Goodie bag for every child' },
+  ],
+
+  // Peak and off-peak pricing by start time (starting points; edit in Admin → Pricing).
+  // A party whose START time falls in a window gets that amount added (negative = discount).
+  timePricing: [
+    { id: 'prime', label: 'Prime time (weekend midday)', days: [0, 6], from: '11:00', to: '14:30', adjustCents: 5000 },
+    { id: 'friday', label: 'Friday evening savings', days: [5], from: '16:00', to: '21:00', adjustCents: -5000 },
+  ],
+
+  // Families changing or cancelling from their booking page. Starting points: confirm with your policy.
+  changes: {
+    rescheduleMinDays: 7,          // self-serve date changes up to this many days before the party
+    freeReschedules: 1,            // after this many, the page asks them to contact staff
+    cancelRefundMinDays: 14,       // cancel at least this many days out: everything except the deposit is refunded
+  },
+
+  // Follow-ups that win back bookings.
+  recovery: { afterHours: 3, withinDays: 3 },   // "your time is still open" email after an unpaid hold expires
+  guestOffer: {
+    enabled: true,
+    daysAfterParty: 2,             // sent to guest families who opted in, this many days after the party
+    programsText: 'camps, clinics and leagues',
+    programsUrl: null,             // e.g. 'https://www.nxgs.net/programs'
+  },
+
+  // Common questions shown on the booking page, the search landing page, and known to the chat assistant.
+  // Answers marked draft: true are hidden until staff fill them in (Admin → Website).
+  faq: [
+    // auto: the answer is written from the current settings, so it stays right when prices or policies change.
+    { q: 'How long is a party?', auto: 'length' },
+    { q: 'How many kids can come?', auto: 'kids' },
+    { q: 'How do payments work?', auto: 'payments' },
+    { q: 'Do guests need a waiver?', a: 'Yes. Every child who plays needs a waiver signed by a parent or guardian. Guests sign online through your invitation link, and a waiver is good for a year.' },
+    { q: 'What should kids wear?', a: 'Sneakers and comfortable clothes they can run in.' },
+    { q: 'When should we arrive?', a: 'Please arrive 10 to 15 minutes before your start time.' },
+    { q: 'Can we change or cancel?', auto: 'changes' },
+    { q: 'Can we bring our own cake and food?', a: '', draft: true },
+    { q: 'Can parents stay and watch?', a: '', draft: true },
+    { q: 'Where do we park?', a: '', draft: true },
+  ],
+
+  // The search-friendly birthday party page (/birthday-parties). Edit in Admin → Website.
+  seo: {
+    pageTitle: 'Kids Birthday Parties in Farmingdale, NY',
+    headline: 'Sports birthday parties in Farmingdale',
+    intro: 'Turf field games, a video game room and a private party room, with a party host to run it all. Pick your package and book online in minutes.',
+    areas: ['Farmingdale', 'Bethpage', 'Plainview', 'Melville', 'Massapequa', 'Wantagh', 'Levittown', 'Hicksville'],
+  },
+
+  // Languages customers can pick on the booking pages, emails and chat.
+  languages: ['en', 'es'],
 
   // Add-on categories, in the order they appear on the booking page.
   addOnCategories: [
@@ -198,6 +265,8 @@ module.exports = {
     // Entertainment & upgrades
     { id: 'scoreboard', category: 'fun', name: 'Video scoreboard birthday feature', detail: 'The birthday child on the big screen', unit: 'party', priceCents: 7500, costCents: 0, minQty: 1, maxQty: 1, leadDays: 3, vendor: 'NXGS', taxable: true,
       includes: "Birthday child's name and photo on the video scoreboard\nHappy-birthday message during field play\nSend us a photo after booking" },
+    { id: 'highlight-video', category: 'fun', name: 'Party highlight video', detail: 'A short clip of the party to keep and share', unit: 'party', priceCents: 4900, costCents: 0, minQty: 1, maxQty: 1, leadDays: 0, vendor: 'NXGS', taxable: true,
+      includes: "A 30\u201360 second highlight clip of the party\nClips from field play and the birthday moment\nSent to you by link within a few days after the party" },
     { id: 'bounce-house', category: 'fun', name: 'Bounce house rental', detail: 'Inflatable for the party', unit: 'party', priceCents: 25000, costCents: 15000, minQty: 1, maxQty: 1, leadDays: 7, vendor: 'TBD', taxable: true,
       includes: "Inflatable bounce house for the length of the party\nDelivered, set up and taken down for you" },
   ],

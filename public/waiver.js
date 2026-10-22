@@ -2,36 +2,40 @@
  * NXWaiver.mount(container, { inviteToken, prefill: {childName, guardianName, guardianEmail, guardianPhone, medicalNotes}, onDone(result) })
  */
 (function () {
+  var T = window.NXI18N ? NXI18N.t : function (k) { return k; };
+  var LANG = window.NXI18N ? NXI18N.lang : 'en';
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
   function mount(el, opts) {
     opts = opts || {};
     var p = opts.prefill || {};
     var uid = 'w' + Math.random().toString(36).slice(2, 8);
-    el.innerHTML = '<p class="muted">Loading waiver…</p>';
-    fetch('/api/waiver').then(function (r) { return r.json(); }).then(function (w) {
+    el.innerHTML = '<p class="muted">' + esc(T('loadingWaiver')) + '</p>';
+    fetch('/api/waiver?lang=' + LANG).then(function (r) { return r.json(); }).then(function (w) {
       el.innerHTML =
         '<form class="waiver" novalidate>' +
-        (w.isSample ? '<p class="banner">Sample waiver text. NXGS must replace it with its attorney-approved waiver before real use.</p>' : '') +
+        (w.isSample ? '<p class="banner">' + esc(T('sampleWaiver')) + '</p>' : '') +
+        (w.translationMissing && T('waiverEnglishOnly') ? '<p class="muted">' + esc(T('waiverEnglishOnly')) + '</p>' : '') +
         '<h3 class="waiver-title">' + esc(w.title) + '</h3>' +
         '<div class="waiver-text" tabindex="0">' + w.text.split(/\n\n+/).map(function (para) { return '<p>' + esc(para) + '</p>'; }).join('') + '</div>' +
-        '<div class="row"><div><label for="' + uid + 'c">Child’s full name</label><input id="' + uid + 'c" name="childName" autocomplete="off" value="' + esc(p.childName) + '"></div>' +
-        '<div><label for="' + uid + 'b">Child’s birth date <span class="muted">(optional)</span></label><input id="' + uid + 'b" name="childBirthdate" type="date"></div></div>' +
-        '<div class="row"><div><label for="' + uid + 'g">Parent/guardian full name</label><input id="' + uid + 'g" name="guardianName" autocomplete="name" value="' + esc(p.guardianName) + '"></div>' +
-        '<div><label for="' + uid + 'e">Email</label><input id="' + uid + 'e" name="guardianEmail" type="email" autocomplete="email" value="' + esc(p.guardianEmail) + '"></div></div>' +
-        '<div class="row"><div><label for="' + uid + 'p">Phone</label><input id="' + uid + 'p" name="guardianPhone" type="tel" autocomplete="tel" value="' + esc(p.guardianPhone) + '"></div>' +
-        '<div><label for="' + uid + 'en">Emergency contact <span class="muted">(name & phone)</span></label><input id="' + uid + 'en" name="emergency" placeholder="e.g. Chris Rivera, 516-555-0102"></div></div>' +
-        '<label for="' + uid + 'm">Allergies or medical notes <span class="muted">(or “none”)</span></label><textarea id="' + uid + 'm" name="medicalNotes" rows="2">' + esc(p.medicalNotes) + '</textarea>' +
-        '<label class="check"><input type="checkbox" name="agree"> I am the parent or legal guardian and I have read and agree to the waiver above.</label>' +
-        '<label>Sign below with your finger or mouse</label>' +
-        '<div class="sig-wrap"><canvas class="sig" aria-label="Signature pad"></canvas><button type="button" class="btn ghost small sig-clear">Clear</button></div>' +
-        '<label for="' + uid + 't">Type your full name to confirm</label><input id="' + uid + 't" name="typedSignature" autocomplete="off">' +
+        '<div class="row"><div><label for="' + uid + 'c">' + esc(T('childFull')) + '</label><input id="' + uid + 'c" name="childName" autocomplete="off" value="' + esc(p.childName) + '"></div>' +
+        '<div><label for="' + uid + 'b">' + esc(T('birthDate')) + ' <span class="muted">' + esc(T('optional')) + '</span></label><input id="' + uid + 'b" name="childBirthdate" type="date"></div></div>' +
+        '<div class="row"><div><label for="' + uid + 'g">' + esc(T('guardianFull')) + '</label><input id="' + uid + 'g" name="guardianName" autocomplete="name" value="' + esc(p.guardianName) + '"></div>' +
+        '<div><label for="' + uid + 'e">' + esc(T('email')) + '</label><input id="' + uid + 'e" name="guardianEmail" type="email" autocomplete="email" value="' + esc(p.guardianEmail) + '"></div></div>' +
+        '<div class="row"><div><label for="' + uid + 'p">' + esc(T('phone')) + '</label><input id="' + uid + 'p" name="guardianPhone" type="tel" autocomplete="tel" value="' + esc(p.guardianPhone) + '"></div>' +
+        '<div><label for="' + uid + 'en">' + esc(T('emergency')) + ' <span class="muted">' + esc(T('emergencyHint')) + '</span></label><input id="' + uid + 'en" name="emergency" placeholder="Chris Rivera, 516-555-0102"></div></div>' +
+        '<label for="' + uid + 'm">' + esc(T('medical')) + ' <span class="muted">' + esc(T('allergiesOrHint')) + '</span></label><textarea id="' + uid + 'm" name="medicalNotes" rows="2">' + esc(p.medicalNotes) + '</textarea>' +
+        '<label class="check"><input type="checkbox" name="agree"> ' + esc(T('agree')) + '</label>' +
+        '<label>' + esc(T('signBelow')) + '</label>' +
+        '<div class="sig-wrap"><canvas class="sig" aria-label="Signature pad"></canvas><button type="button" class="btn ghost small sig-clear">' + esc(T('clear')) + '</button></div>' +
+        '<label for="' + uid + 't">' + esc(T('typeName')) + '</label><input id="' + uid + 't" name="typedSignature" autocomplete="off">' +
+        (opts.hideOptIn ? '' : '<label class="check"><input type="checkbox" name="marketingOptIn"> ' + esc(T('marketingOptIn')) + '</label>') +
         '<div class="error hidden" role="alert"></div>' +
-        '<div class="actions"><button class="btn" type="submit">Sign waiver</button></div>' +
-        '<p class="muted small">Valid for ' + Math.round(w.validDays / 30.4) + ' months. Signed ' + new Date().toLocaleDateString() + ' · version ' + esc(w.version) + '</p>' +
+        '<div class="actions"><button class="btn" type="submit">' + esc(T('signWaiver')) + '</button></div>' +
+        '<p class="muted small">' + esc(T('validFor', Math.round(w.validDays / 30.4), new Date().toLocaleDateString(window.NXI18N ? NXI18N.locale : undefined), w.version)) + '</p>' +
         '</form>';
       wire(el.querySelector('form'), opts);
-    }).catch(function () { el.innerHTML = '<p class="error">The waiver could not be loaded. Please sign at the front desk.</p>'; });
+    }).catch(function () { el.innerHTML = '<p class="error">' + esc(T('waiverNoLoad')) + '</p>'; });
   }
 
   function wire(form, opts) {
@@ -68,16 +72,17 @@
         childName: f.childName.value, childBirthdate: f.childBirthdate.value || null,
         guardianName: f.guardianName.value, guardianEmail: f.guardianEmail.value, guardianPhone: f.guardianPhone.value,
         emergencyName: em ? em[1].trim() : emergency, emergencyPhone: em ? em[2].trim() : null,
-        medicalNotes: f.medicalNotes.value, agree: f.agree.checked,
+        medicalNotes: f.medicalNotes.value, agree: f.agree.checked, lang: LANG,
+        marketingOptIn: !!(opts.hideOptIn || (f.marketingOptIn && f.marketingOptIn.checked)),
         typedSignature: f.typedSignature.value,
         signature: drawn > 3 ? canvas.toDataURL('image/png') : null,
       };
       var btn = form.querySelector('button[type=submit]');
-      btn.disabled = true; btn.textContent = 'Signing…';
+      btn.disabled = true; btn.textContent = T('signing');
       fetch('/api/waivers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Could not save the waiver.'); return d; }); })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || T('saveFailed')); return d; }); })
         .then(function (d) { if (opts.onDone) opts.onDone(d); })
-        .catch(function (x) { err.textContent = x.message; err.classList.remove('hidden'); btn.disabled = false; btn.textContent = 'Sign waiver'; });
+        .catch(function (x) { err.textContent = x.message; err.classList.remove('hidden'); btn.disabled = false; btn.textContent = T('signWaiver'); });
     });
   }
 

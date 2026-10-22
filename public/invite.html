@@ -8,16 +8,21 @@
   <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
-<main id="app"><p class="muted">Loading invitation…</p></main>
+<main><div class="topline"><span id="langBox"></span></div><div id="app"><p class="muted" data-i18n="loadingInvite"></p></div></main>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/waiver.js"></script>
+<script src="/static/qrcode.js"></script>
 <script src="/static/sponsors.js"></script>
 <script>
 const TOKEN = "__INVITE_TOKEN__";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmtDate = (d) => new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
+const t = NXI18N.t, LANG = NXI18N.lang;
+const fmtDate = (d) => NXI18N.date(d);
+const ordinal = (n) => (LANG === 'es' ? `${n}.º ` : n + (['th', 'st', 'nd', 'rd'][((n % 100) - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th') + ' ');
+function qrSvg(text) { try { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } catch { return ''; } }
+const passCard = (code, child) => `<div class="pass"><h3 style="margin:14px 0 4px">${t('passTitle')}</h3><p class="muted" style="margin:0 0 8px">${esc(t('passBday', child))} · ${t('passIntro')}</p>${qrSvg(`${location.origin}/c/${code}`)}</div>`;
 const store = {
   get() { try { return JSON.parse(localStorage.getItem('nxgs-rsvp-' + TOKEN) || 'null'); } catch { return null; } },
   set(v) { try { localStorage.setItem('nxgs-rsvp-' + TOKEN, JSON.stringify(v)); } catch {} },
@@ -32,56 +37,62 @@ function calLink(inv) {
 }
 
 async function load() {
+  NXI18N.apply();
+  NXI18N.toggle($('langBox'));
   const r = await fetch('/api/invite/' + TOKEN);
-  if (!r.ok) { $('app').innerHTML = '<div class="card"><h1>Invitation not found</h1><p>Please check the link you were sent.</p></div>'; return; }
+  if (!r.ok) { $('app').innerHTML = `<div class="card"><h1>${t('inviteNotFound')}</h1><p>${t('inviteNotFoundHint')}</p></div>`; return; }
   INV = await r.json();
-  const t = INV.theme || { emoji: '🎉', color: 'var(--brand)', name: '' };
-  const age = INV.childAge ? `${ordinal(INV.childAge)} ` : '';
+  const th = INV.theme || { emoji: '🎉', color: 'var(--brand)', name: '' };
+  const age = INV.childAge ? ordinal(INV.childAge) : '';
   const saved = store.get();
   $('app').innerHTML = `
-    <div class="theme-hero" style="background:${esc(t.color)}">
-      <div class="emoji" aria-hidden="true">${t.emoji}</div>
-      <p class="eyebrow" style="color:rgb(255 255 255 / .85);margin:8px 0 0">You’re invited!</p>
-      <h1>${INV.childName ? `${esc(INV.childName)}’s ${age}Birthday` : 'A birthday party'}${t.name ? ` · ${esc(t.name)}` : ''}</h1>
+    <div class="theme-hero" style="background:${esc(th.color)}">
+      <div class="emoji" aria-hidden="true">${th.emoji}</div>
+      <p class="eyebrow" style="color:rgb(255 255 255 / .85);margin:8px 0 0">${t('youreInvited')}</p>
+      <h1>${INV.childName ? esc(t('birthdayOf', INV.childName, age)) : t('aParty')}</h1>
       <p style="margin:0">${esc(fmtDate(INV.date))} · ${esc(INV.timeLabel)} – ${esc(INV.endLabel)}</p>
     </div>
-    ${INV.active ? '' : '<p class="banner">This party is no longer active. Please check with the host.</p>'}
+    ${INV.active ? '' : `<p class="banner">${t('notActive')}</p>`}
     <div class="card">
       <dl class="facts" style="margin-top:0">
-        <dt>Where</dt><dd>${esc(INV.place.name)}<br><span class="muted" style="font-weight:400">${esc(INV.place.address)}</span></dd>
-        <dt>Host</dt><dd>${esc(INV.hostFirstName)}</dd>
+        <dt>${t('where')}</dt><dd>${esc(INV.place.name)}<br><span class="muted" style="font-weight:400">${esc(INV.place.address)}</span></dd>
+        <dt>${t('host')}</dt><dd>${esc(INV.hostFirstName)}</dd>
       </dl>
-      <h2>What we’ll do</h2>
+      <h2>${t('whatWeDo')}</h2>
       <ul class="schedule">${INV.schedule.map((s) => `<li><span>${esc(s.from)}</span> ${esc(s.label)}</li>`).join('')}</ul>
-      <div class="actions"><a class="btn ghost small" href="${esc(calLink(INV))}" target="_blank" rel="noopener">Add to Google Calendar</a></div>
-      <p class="muted">Please wear sneakers. Every child who plays needs a signed waiver, so sign it below and check-in will be quick.</p>
+      <div class="actions"><a class="btn ghost small" href="${esc(calLink(INV))}" target="_blank" rel="noopener">${t('addCal')}</a></div>
+      <p class="muted">${t('sneakers')}</p>
     </div>
     ${INV.active ? `
     <div class="card" id="rsvpCard">
-      <h2 style="margin-top:0">RSVP</h2>
-      ${saved ? `<p class="banner ok">You replied “${saved.attending === 'yes' ? 'Coming' : 'Can’t make it'}” for ${esc(saved.childName)}. You can change it below.</p>` : ''}
+      <h2 style="margin-top:0">${t('rsvp')}</h2>
+      ${saved ? `<p class="banner ok">${esc(t('youReplied', saved.attending === 'yes' ? t('comingYes') : t('cantMake'), saved.childName))}</p>` : ''}
+      <div id="savedPass"></div>
       <form id="rsvp" novalidate>
         <div class="toggle" role="radiogroup">
-          <label><input type="radio" name="att" value="yes" ${!saved || saved.attending === 'yes' ? 'checked' : ''}> 🎉 We’ll be there</label>
-          <label><input type="radio" name="att" value="no" ${saved && saved.attending === 'no' ? 'checked' : ''}> Can’t make it</label>
+          <label><input type="radio" name="att" value="yes" ${!saved || saved.attending === 'yes' ? 'checked' : ''}> ${t('weBeThere')}</label>
+          <label><input type="radio" name="att" value="no" ${saved && saved.attending === 'no' ? 'checked' : ''}> ${t('cantMake')}</label>
         </div>
         <div class="row">
-          <div><label for="rChild">Your child’s name</label><input id="rChild" value="${esc(saved?.childName || '')}"></div>
-          <div><label for="rParent">Your name</label><input id="rParent" autocomplete="name" value="${esc(saved?.parentName || '')}"></div>
+          <div><label for="rChild">${t('yourChild')}</label><input id="rChild" value="${esc(saved?.childName || '')}"></div>
+          <div><label for="rParent">${t('yourName')}</label><input id="rParent" autocomplete="name" value="${esc(saved?.parentName || '')}"></div>
         </div>
         <div class="row">
-          <div><label for="rEmail">Email</label><input id="rEmail" type="email" autocomplete="email" value="${esc(saved?.email || '')}"></div>
-          <div><label for="rPhone">Phone <span class="muted">(optional)</span></label><input id="rPhone" type="tel" autocomplete="tel" value="${esc(saved?.phone || '')}"></div>
+          <div><label for="rEmail">${t('email')}</label><input id="rEmail" type="email" autocomplete="email" value="${esc(saved?.email || '')}"></div>
+          <div><label for="rPhone">${t('phoneOpt')} <span class="muted">${t('optional')}</span></label><input id="rPhone" type="tel" autocomplete="tel" value="${esc(saved?.phone || '')}"></div>
         </div>
-        <label for="rAllergy">Food allergies <span class="muted">(or “none”)</span></label><input id="rAllergy" value="${esc(saved?.allergies || '')}">
+        <label for="rAllergy">${t('allergiesOr')} <span class="muted">${t('allergiesOrHint')}</span></label><input id="rAllergy" value="${esc(saved?.allergies || '')}">
+        <label class="check"><input type="checkbox" id="rMkt" ${saved?.marketingOptIn ? 'checked' : ''}> ${t('marketingOptIn')}</label>
         <div id="rErr" class="error hidden"></div>
-        <div class="actions"><button class="btn" type="submit">Send RSVP</button></div>
+        <div class="actions"><button class="btn" type="submit">${t('sendRsvp')}</button></div>
       </form>
     </div>
     <div class="card hidden" id="waiverCard"></div>` : ''}
     <div id="sponsorBox" class="foot"></div>`;
   NXSponsors.mount($('sponsorBox'), 'invite', INV.locationId);
   if ($('rsvp')) $('rsvp').onsubmit = submitRsvp;
+  // Coming back: show their check-in pass again.
+  if (saved?.attending === 'yes' && saved.rsvpToken) fetch(`/api/invite/${TOKEN}/pass?r=${encodeURIComponent(saved.rsvpToken)}`).then((r) => r.ok ? r.json() : null).then((d) => { if (d?.checkinPass && $('savedPass')) $('savedPass').innerHTML = passCard(d.checkinPass, saved.childName); }).catch(() => {});
 }
 
 async function submitRsvp(e) {
@@ -90,6 +101,7 @@ async function submitRsvp(e) {
   const body = {
     rsvpToken: saved?.rsvpToken, attending: document.querySelector('input[name=att]:checked').value,
     childName: $('rChild').value, parentName: $('rParent').value, email: $('rEmail').value, phone: $('rPhone').value, allergies: $('rAllergy').value,
+    marketingOptIn: $('rMkt').checked, lang: LANG,
   };
   $('rErr').classList.add('hidden');
   const r = await fetch(`/api/invite/${TOKEN}/rsvp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -98,21 +110,22 @@ async function submitRsvp(e) {
   store.set({ ...body, rsvpToken: d.rsvpToken });
   const card = $('rsvpCard');
   if (d.attending === 'no') {
-    card.innerHTML = `<h2 style="margin-top:0">Thanks for letting us know</h2><p>We’ll miss ${esc(body.childName)}! You can change your reply anytime with this link.</p>`;
+    card.innerHTML = `<h2 style="margin-top:0">${t('thanksLetting')}</h2><p>${esc(t('missChild', body.childName))}</p>`;
     return;
   }
-  card.innerHTML = `<h2 style="margin-top:0">See you there! 🎉</h2><p>${esc(body.childName)} is on the guest list.</p>`;
+  card.innerHTML = `<h2 style="margin-top:0">${t('seeYou')}</h2><p>${esc(t('onList', body.childName))}</p>${d.checkinPass ? passCard(d.checkinPass, body.childName) : ''}`;
   const w = $('waiverCard');
   w.classList.remove('hidden');
   if (d.waiverOnFile) {
-    w.innerHTML = `<h2 style="margin-top:0">Waiver</h2><p class="banner ok">✓ We already have a signed waiver for ${esc(body.childName)}. Nothing else to do!</p>`;
+    w.innerHTML = `<h2 style="margin-top:0">${t('waiver')}</h2><p class="banner ok">${esc(t('waiverOnFile', body.childName))}</p>`;
     return;
   }
-  w.innerHTML = '<h2 style="margin-top:0">One last step: sign the waiver</h2><p class="muted">It takes about a minute and is good for a year at NXGS.</p><div id="waiverMount"></div>';
+  w.innerHTML = `<h2 style="margin-top:0">${t('lastStep')}</h2><p class="muted">${t('aboutMinute')}</p><div id="waiverMount"></div>`;
   NXWaiver.mount($('waiverMount'), {
     inviteToken: TOKEN,
     prefill: { childName: body.childName, guardianName: body.parentName, guardianEmail: body.email, guardianPhone: body.phone, medicalNotes: body.allergies },
-    onDone: (res) => { w.innerHTML = `<h2 style="margin-top:0">All set!</h2><p class="banner ok">✓ Waiver signed for ${esc(res.childName)}. See you at the party!</p>`; w.scrollIntoView({ block: 'start' }); },
+    hideOptIn: body.marketingOptIn,
+    onDone: (res) => { w.innerHTML = `<h2 style="margin-top:0">${t('allSet')}</h2><p class="banner ok">${esc(t('waiverSigned', res.childName))}</p>`; w.scrollIntoView({ block: 'start' }); },
   });
   w.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

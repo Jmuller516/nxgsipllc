@@ -52,6 +52,17 @@
     .chip.owe { box-shadow: inset 3px 0 0 var(--bad); }
     .chip.block { background: var(--bad-bg); color: var(--bad); }
     @media (max-width: 520px) { .acal .cell { min-height: 58px; } .chip .t { display: none; } }
+    .hbars { display: grid; gap: 8px; }
+    .hbar { display: grid; grid-template-columns: minmax(110px, 30%) 1fr auto; gap: 10px; align-items: center; font-size: .9rem; }
+    .hbar .track { height: 14px; background: color-mix(in srgb, var(--line) 50%, transparent); border-radius: 0 4px 4px 0; }
+    .hbar .fill { height: 100%; background: var(--brand); border-radius: 0 4px 4px 0; min-width: 2px; }
+    .hbar .v { font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+    .heat td { text-align: center; font-variant-numeric: tabular-nums; border-radius: 4px; padding: 6px 4px; }
+    .heat th { font-size: .75rem; color: var(--muted); font-weight: 600; padding: 4px; }
+    .checklist li { margin: 6px 0; } .checklist .ok { color: var(--ok); } .checklist .todo { color: var(--warn); }
+    .photo-grid { display: flex; gap: 8px; flex-wrap: wrap; } .photo-grid figure { margin: 0; position: relative; } .photo-grid img { width: 120px; height: 80px; object-fit: cover; border-radius: 8px; display: block; }
+    .photo-grid button { position: absolute; top: 4px; right: 4px; }
+    .faq-edit { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0; }
     iframe.preview { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
   </style>
 </head>
@@ -60,7 +71,8 @@
   <p class="eyebrow">NXGS · Party &amp; events</p>
   <div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap">
     <h1 style="margin:0">Admin</h1>
-    <div><label for="loc" style="margin:0 0 4px">Location</label><select id="loc" style="min-width:200px"></select></div>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap"><a class="btn ghost small" href="/admin/checkin" target="_blank">Door check-in</a><a class="btn ghost small" href="/admin/timer" target="_blank">Party timer</a>
+      <div><label for="loc" style="margin:0 0 4px">Location</label><select id="loc" style="min-width:200px"></select></div></div>
   </div>
   <p class="muted" id="locNote" style="margin:6px 0 14px"></p>
 
@@ -70,6 +82,8 @@
     <button class="tab" aria-selected="true" data-tab="calendar">Calendar</button>
     <button class="tab" aria-selected="false" data-tab="bookings">Parties</button>
     <button class="tab" aria-selected="false" data-tab="leads">Leads <span id="leadCount"></span></button>
+    <button class="tab" aria-selected="false" data-tab="insights">Insights</button>
+    <button class="tab" aria-selected="false" data-tab="growth">Waitlist & offers</button>
     <button class="tab" aria-selected="false" data-tab="reports">Reports</button>
     <button class="tab" aria-selected="false" data-tab="pricing">Pricing</button>
     <button class="tab" aria-selected="false" data-tab="chats">Chats</button>
@@ -79,6 +93,8 @@
     <button class="tab" aria-selected="false" data-tab="sponsors">Sponsors</button>
     <button class="tab" aria-selected="false" data-tab="marketplace">Marketplace</button>
     <button class="tab" aria-selected="false" data-tab="emails">Messages</button>
+    <button class="tab" aria-selected="false" data-tab="website">Website</button>
+    <button class="tab" aria-selected="false" data-tab="setup">Setup</button>
     <button class="tab" aria-selected="false" data-tab="settings">Settings</button>
   </div>
 
@@ -122,6 +138,32 @@
     <div class="scroll"><table class="list" id="leads"></table></div>
   </section>
 
+  <section id="tab-insights" class="hidden">
+    <div class="card">
+      <div class="toolbar">
+        <div><label for="inRange">Party dates</label><select id="inRange"><option value="window">Last 90 days + next 6 months</option><option value="next90">Next 90 days</option><option value="last90">Last 90 days</option><option value="year">This year</option><option value="all">All time</option></select></div>
+      </div>
+      <div class="tiles" id="inTiles"></div>
+    </div>
+    <div class="row">
+      <div class="card"><h2 style="margin-top:0">Revenue by package</h2><div class="hbars" id="inPkg"></div></div>
+      <div class="card"><h2 style="margin-top:0">Where bookings come from</h2><div class="hbars" id="inSrc"></div></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Add-ons: how often families pick each</h2><p class="muted" id="inAddNote"></p><div class="hbars" id="inAdd"></div></div>
+    <div class="card"><h2 style="margin-top:0">When parties happen</h2><p class="muted">Parties by start time. Darker = more parties.</p><div class="scroll"><table class="heat" id="inHeat"></table></div>
+      <h3>Party time used, by day</h3><p class="muted">Booked party time compared with open hours × parties that can run at once.</p><div class="hbars" id="inUse"></div></div>
+    <div class="card"><h2 style="margin-top:0">What's winning bookings back</h2><div class="scroll"><table class="list" id="inProg"></table></div></div>
+  </section>
+
+  <section id="tab-growth" class="hidden">
+    <div class="tiles" id="grTiles"></div>
+    <div class="card"><h2 style="margin-top:0">Waitlist</h2><p class="muted">Families waiting for a full day. They're emailed (and texted if they agreed) the moment a time opens on that day.</p><div class="scroll"><table class="list" id="grWait"></table></div></div>
+    <div class="card"><h2 style="margin-top:0">Offer list</h2>
+      <p class="muted">Families who ticked “send me camps, clinics and party offers” on an RSVP, waiver or booking. Guest families get a “your turn to celebrate” email with the host's referral code two days after the party. Every email has an unsubscribe link.</p>
+      <div class="actions"><a class="btn ghost small" href="/api/admin/export/contacts.csv" download="nxgs-offer-list.csv">Download list (CSV)</a></div>
+      <div class="scroll"><table class="list" id="grContacts"></table></div></div>
+  </section>
+
   <section id="tab-reports" class="hidden">
     <div class="card">
       <h2 style="margin-top:0">By month</h2>
@@ -149,6 +191,11 @@
         <div><label for="pBalance">Balance due (days before party)</label><input id="pBalance" type="number" min="0" data-party="balanceDueDaysBefore"></div>
       </div>
       <label for="pTax">Sales tax %</label><input id="pTax" type="number" step="0.001" min="0" max="100" data-party="taxRatePercent" style="max-width:160px">
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Peak & off-peak start times</h2>
+      <p class="muted">Added to (or taken off) the price when a party starts in that window. Use a negative number for a discount.</p>
+      <div class="scroll"><table class="list price-table" id="priceTiming"></table></div>
     </div>
     <div class="card">
       <h2 style="margin-top:0">Party packages</h2>
@@ -244,6 +291,43 @@
     </div>
   </section>
 
+  <section id="tab-website" class="hidden">
+    <div class="card"><h2 style="margin-top:0">Photos</h2><p class="muted">Real photos replace the renderings on the booking page and the search page. The first photo is the big one.</p>
+      <div class="photo-grid" id="wsPhotos"></div>
+      <label class="btn ghost small" style="display:inline-block;margin-top:10px">Add photo<input type="file" id="wsPhotoIn" accept="image/jpeg,image/png,image/webp" hidden></label></div>
+    <div class="card"><h2 style="margin-top:0">Video tour</h2><label for="wsVideo">YouTube or Vimeo link, or a link to an .mp4</label><input id="wsVideo" placeholder="https://youtu.be/…">
+      <div class="actions"><button class="btn" id="wsVideoSave">Save video</button><span class="muted" id="wsVideoMsg"></span></div></div>
+    <div class="card"><h2 style="margin-top:0">Questions parents ask</h2><p class="muted">Shown on the booking page and search page, and the chat assistant uses them. Questions without an answer stay hidden. Answers marked “automatic” are written from your prices and policies.</p>
+      <div id="wsFaq"></div><div class="actions"><button class="btn ghost small" id="wsFaqAdd">+ Add question</button><button class="btn" id="wsFaqSave">Save questions</button><span class="muted" id="wsFaqMsg"></span></div></div>
+    <div class="card"><h2 style="margin-top:0">Instagram</h2><div class="row"><div><label for="wsIgHandle">Handle</label><input id="wsIgHandle" placeholder="nxgs"></div></div>
+      <label for="wsIgPosts">Post links to show (one per line, up to 6)</label><textarea id="wsIgPosts" rows="3" placeholder="https://www.instagram.com/p/…"></textarea>
+      <div class="actions"><button class="btn" id="wsIgSave">Save Instagram</button><span class="muted" id="wsIgMsg"></span></div></div>
+    <div class="card"><h2 style="margin-top:0">Search page</h2><p class="muted">The page Google shows for “kids birthday party Farmingdale”: <a href="/birthday-parties" target="_blank">/birthday-parties</a> (Spanish: <a href="/fiestas-de-cumpleanos" target="_blank">/fiestas-de-cumpleanos</a>). Submit <code>/sitemap.xml</code> in Google Search Console.</p>
+      <label for="wsTitle">Page title</label><input id="wsTitle" maxlength="70"><label for="wsHead">Headline</label><input id="wsHead"><label for="wsIntro">Intro</label><textarea id="wsIntro" rows="3"></textarea>
+      <label for="wsAreas">Towns you serve (comma separated)</label><input id="wsAreas">
+      <div class="actions"><button class="btn" id="wsSeoSave">Save search page</button><button class="btn ghost" id="wsSnippet">Copy HTML for WordPress</button><span class="muted" id="wsSeoMsg"></span></div></div>
+  </section>
+
+  <section id="tab-setup" class="hidden">
+    <div class="card"><h2 style="margin-top:0">Launch checklist</h2><ul class="checklist" id="suCheck"></ul></div>
+    <div class="card"><h2 style="margin-top:0">Facility</h2>
+      <div class="row"><div><label for="suName">Name</label><input id="suName"></div><div><label for="suShort">Short name</label><input id="suShort"></div></div>
+      <div class="row"><div><label for="suWeb">Website</label><input id="suWeb"></div><div><label for="suEmail">Email customers see</label><input id="suEmail" type="email"></div></div>
+      <div class="row"><div><label for="suPhone">Front desk phone</label><input id="suPhone"></div><div><label for="suAddr">Main address</label><input id="suAddr"></div></div>
+      <label for="suTag">How the chat assistant describes you</label><input id="suTag">
+      <div class="row"><div><label for="suBot">Chat assistant's name</label><input id="suBot"></div><div><label for="suAlerts">Staff alert emails (comma separated)</label><input id="suAlerts"></div></div>
+      <div class="row"><div><label for="suFrom">Emails come from</label><input id="suFrom"></div><div><label for="suReply">Replies go to</label><input id="suReply"></div></div>
+      <div class="actions"><button class="btn" id="suBizSave">Save facility</button><span class="muted" id="suBizMsg"></span></div></div>
+    <div class="card"><h2 style="margin-top:0">Brand</h2>
+      <div class="row"><div><label for="suColor">Main color</label><input id="suColor" type="color"></div><div><label for="suAccent">Accent color</label><input id="suAccent" type="color"></div></div>
+      <div class="row"><div><label for="suFont">Google font <span class="muted">(optional, e.g. Montserrat:wght@400;700)</span></label><input id="suFont"></div><div><label for="suRadius">Corner roundness (px)</label><input id="suRadius" type="number" min="0" max="30"></div></div>
+      <label>Logo</label><div id="suLogo"></div><label class="btn ghost small" style="display:inline-block">Upload logo<input type="file" id="suLogoIn" accept="image/png,image/jpeg,image/webp" hidden></label>
+      <div class="actions"><button class="btn" id="suBrandSave">Save brand</button><span class="muted" id="suBrandMsg"></span></div></div>
+    <div class="card"><h2 style="margin-top:0">Locations & party hours</h2><p class="muted">Only locations marked “taking bookings” show to customers.</p><div id="suLocs"></div>
+      <div class="actions"><button class="btn ghost small" id="suLocAdd">+ Add location</button><button class="btn" id="suLocSave">Save locations</button><span class="muted" id="suLocMsg"></span></div></div>
+    <p class="muted small">Selling this app to another facility: each facility runs its own copy with its own database. They fill in this Setup tab and the Pricing tab, and they're live; nothing in the code needs changing.</p>
+  </section>
+
   <section id="tab-settings" class="hidden">
     <div class="card">
       <h2 style="margin-top:0">Waiver text</h2>
@@ -251,6 +335,10 @@
       <textarea id="waiverText" rows="10" style="font-size:.9rem"></textarea>
       <div class="actions"><button class="btn" id="waiverSave">Save waiver text</button><span class="muted" id="waiverMsg"></span></div>
       <p class="muted small">Waivers already signed keep the exact version that was signed.</p>
+      <h3>Spanish waiver <span class="muted">(optional)</span></h3>
+      <p class="muted">Paste a Spanish version from your attorney to show Spanish-speaking families. Until then they see the English waiver with a note.</p>
+      <textarea id="waiverTextEs" rows="6" style="font-size:.9rem"></textarea>
+      <div class="actions"><button class="btn ghost" id="waiverSaveEs">Save Spanish waiver</button><span class="muted" id="waiverMsgEs"></span></div>
     </div>
     <div class="card">
       <h2 style="margin-top:0">Text messages</h2>
@@ -337,9 +425,17 @@ async function openBooking(id) {
       ${b.themeInfo ? `<dt>Theme</dt><dd>${b.themeInfo.emoji} ${esc(b.themeInfo.name)}</dd>` : ''}
       ${b.sms_opt_in ? '<dt>Texts</dt><dd>Opted in</dd>' : ''}
       ${b.referred_by ? '<dt>Referral</dt><dd>Booked with a referral code</dd>' : ''}
+      <dt>Came from</dt><dd>${esc(b.source || 'web')}${b.upgraded_from ? ` · upgraded from ${esc(b.upgraded_from)}` : ''}${b.lang === 'es' ? ' · <b>prefers Spanish</b>' : ''}</dd>
+      ${b.checkin ? `<dt>Arrived</dt><dd>${b.checkin.arrived} checked in · <a href="/admin/checkin?party=${b.id}" target="_blank">open check-in</a></dd>` : ''}
     </dl>
+    ${b.refund_due_cents > 0 ? `<div class="banner">Refund owed: ${money(b.refund_due_cents)}. <button class="btn small" id="bRefunded">Mark refunded</button></div>` : ''}
     <h2>Host</h2>
     <div class="linkbox"><input id="hostName" placeholder="Staff member running this party" value="${esc(b.host_name || '')}" style="border:0;background:transparent;padding:4px"><button class="btn small" id="hostSave">Save</button></div>
+    <h2>Highlight video</h2>
+    <div class="linkbox"><input id="vidUrl" placeholder="Paste the video link (YouTube, Google Drive…)" value="${esc(b.video_url || '')}" style="border:0;background:transparent;padding:4px"><button class="btn small" id="vidSave">Save & email family</button></div>
+    ${['confirmed', 'paid', 'pending'].includes(b.status) ? `<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Move this party</summary>
+      <p class="muted">Staff moves skip the online limits. The family, the waitlist and vendors are told automatically.</p>
+      <input id="mvDate" type="date"><div class="slots" id="mvSlots" style="margin-top:8px"></div><div class="actions"><button class="btn" id="mvGo" disabled>Move party</button></div></details>` : ''}
     <h2>Party details ${b.detailsStatus.complete ? '<span class="pill paid">complete</span>' : '<span class="pill pending">missing</span>'}</h2>
     ${b.detailsStatus.missing.length ? `<p class="muted">Missing: ${esc(b.detailsStatus.missing.join(', '))}</p>` : ''}
     <dl class="facts">
@@ -384,6 +480,25 @@ async function openBooking(id) {
     </div>`;
   const err = (e) => { $('dErr').textContent = e.message; $('dErr').classList.remove('hidden'); };
   $('dClose').onclick = () => d.close();
+  $('vidSave').onclick = async () => {
+    try { await api(`/api/admin/bookings/${b.id}`, 'PATCH', { videoUrl: $('vidUrl').value }); $('vidSave').textContent = 'Sent ✓'; } catch (e) { err(e); }
+  };
+  if ($('bRefunded')) $('bRefunded').onclick = async () => {
+    const amt = prompt('Amount refunded ($)?', (b.refund_due_cents / 100).toFixed(2));
+    if (!amt) return;
+    try { await api(`/api/admin/bookings/${b.id}/refunded`, 'POST', { amount: amt, method: 'manual', note: 'Refunded by staff' }); d.close(); refresh(); } catch (e) { err(e); }
+  };
+  let mvTime = null;
+  if ($('mvDate')) {
+    $('mvDate').onchange = async () => {
+      try {
+        const day = await api(`/api/admin/bookings/${b.id}/times?date=${$('mvDate').value}`);
+        $('mvSlots').innerHTML = day.open ? day.slots.map((s) => `<button type="button" class="slot" data-time="${s.time}" aria-pressed="false" ${s.available ? '' : 'disabled'}>${s.label}</button>`).join('') : '<p class="muted">No parties that day.</p>';
+        $('mvSlots').querySelectorAll('.slot').forEach((x) => x.onclick = () => { $('mvSlots').querySelectorAll('.slot').forEach((y) => y.setAttribute('aria-pressed', y === x)); mvTime = x.dataset.time; $('mvGo').disabled = false; });
+      } catch (e) { err(e); }
+    };
+    $('mvGo').onclick = async () => { try { await api(`/api/admin/bookings/${b.id}/reschedule`, 'POST', { date: $('mvDate').value, time: mvTime }); d.close(); refresh(); } catch (e) { err(e); } };
+  }
   $('hostSave').onclick = async () => {
     try { await api(`/api/admin/bookings/${b.id}`, 'PATCH', { hostName: $('hostName').value }); $('hostSave').textContent = 'Saved ✓'; loadCalendar(); } catch (e) { err(e); }
   };
@@ -557,7 +672,122 @@ async function vendorDialog(id) {
   if (!d.open) d.showModal();
 }
 
-function refresh() { return Promise.all([loadSponsors(), loadMarketplace(), loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadWaivers(), loadGifts(), loadReviews(), loadWaiverText(), loadEmails(), loadQbo(), loadFeed()]); }
+// ---------- Insights ----------
+const pct = (x) => Math.round(x * 100) + '%';
+function hbars(el, rows, fmt) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  el.innerHTML = rows.length ? rows.map((r) => `<div class="hbar" title="${esc(r.tip || '')}"><span>${esc(r.label)}</span><div class="track"><div class="fill" style="width:${(r.value / max) * 100}%"></div></div><span class="v">${fmt(r)}</span></div>`).join('') : '<p class="muted">Nothing yet in this range.</p>';
+}
+function rangeDates() {
+  const today = new Date(), d = (n) => { const x = new Date(today); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
+  return { window: [d(-90), d(180)], next90: [d(0), d(90)], last90: [d(-90), d(0)], year: [`${today.getFullYear()}-01-01`, `${today.getFullYear()}-12-31`], all: ['2000-01-01', d(400)] }[$('inRange').value];
+}
+async function loadInsights() {
+  const [from, to] = rangeDates();
+  const r = await api(`/api/admin/insights?from=${from}&to=${to}&location=${LOC}`);
+  const t = r.totals;
+  $('inTiles').innerHTML = `<div class="tile"><b>${t.parties}</b><span>Parties booked</span></div><div class="tile"><b>${money(t.revenueCents)}</b><span>Party revenue</span></div>
+    <div class="tile"><b>${money(t.avgCents)}</b><span>Average party</span></div><div class="tile"><b>${t.avgKids.toFixed(1)}</b><span>Average kids</span></div>
+    <div class="tile"><b>${pct(t.withAddOnsRate)}</b><span>Parties with add-ons</span></div><div class="tile"><b>${pct(r.funnel.rate)}</b><span>Holds that paid (${r.funnel.abandoned} abandoned)</span></div>`;
+  hbars($('inPkg'), r.byPackage.map((p) => ({ label: p.name, value: p.revenueCents, n: p.parties, tip: `${p.parties} parties · avg ${money(p.avgCents)}` })), (x) => `${money(x.value)} · ${x.n}`);
+  hbars($('inSrc'), r.sources.map((s) => ({ label: s.name, value: s.parties, rev: s.revenueCents, tip: money(s.revenueCents) })), (x) => `${x.value} · ${money(x.rev)}`);
+  $('inAddNote').textContent = `Add-ons are ${pct(t.addOnShare)} of party revenue (${money(t.addOnRevenueCents)}).`;
+  hbars($('inAdd'), r.addOns.slice(0, 15).map((a) => ({ label: a.name, value: a.attachRate, rev: a.revenueCents, tip: `${a.units} sold · margin ${money(a.revenueCents - a.costCents)}` })), (x) => `${pct(x.value)} · ${money(x.rev)}`);
+  const max = Math.max(1, ...r.heat.cells.flat());
+  $('inHeat').innerHTML = r.heat.starts.length ? `<tr><th></th>${r.heat.starts.map((s) => `<th>${esc(s.label.replace(':00', ''))}</th>`).join('')}</tr>` + r.heat.days.map((d, i) => `<tr><th>${d}</th>${r.heat.cells[i].map((n) => `<td title="${n} parties" style="background:color-mix(in srgb, var(--brand) ${n ? 12 + (n / max) * 70 : 0}%, transparent);color:${n / max > .55 ? '#fff' : 'var(--ink)'}">${n || ''}</td>`).join('')}</tr>`).join('') : '<tr><td class="muted">No parties in this range.</td></tr>';
+  hbars($('inUse'), r.utilization.map((u) => ({ label: `${u.day} (${u.openDays} days)`, value: u.rate, n: u.parties })), (x) => `${pct(x.value)} · ${x.n} parties`);
+  const p = r.programs;
+  $('inProg').innerHTML = `<tr><th>Program</th><th>Activity</th><th class="num">Parties it brought</th></tr>
+    <tr><td>Chat assistant</td><td>${p.chat.conversations} conversations, ${p.chat.withBooking} booked</td><td class="num">${p.chat.parties}</td></tr>
+    <tr><td>“Make it bigger?” upgrade</td><td>${money(p.upgrades.extraCents)} extra from upgrades</td><td class="num">${p.upgrades.parties}</td></tr>
+    <tr><td>Abandoned-booking emails</td><td>${p.recovery.emails} sent</td><td class="num">${p.recovery.parties}</td></tr>
+    <tr><td>Waitlist</td><td>${p.waitlist.joined} joined, ${p.waitlist.notified} notified</td><td class="num">${p.waitlist.parties}</td></tr>
+    <tr><td>Guest family offers</td><td>${p.guestOffers.optIns} opted in, ${p.guestOffers.sent} offers sent</td><td class="num">${p.guestOffers.parties}</td></tr>
+    <tr><td>Referral codes</td><td></td><td class="num">${p.referrals.parties}</td></tr>`;
+}
+$('inRange').onchange = loadInsights;
+
+// ---------- Waitlist & offers ----------
+async function loadGrowth() {
+  const g = await api('/api/admin/growth');
+  $('grTiles').innerHTML = `<div class="tile"><b>${g.waitlistStats.waiting}</b><span>Waiting now</span></div><div class="tile"><b>${g.waitlistStats.booked}</b><span>Booked from waitlist</span></div>
+    <div class="tile"><b>${g.audience.subscribed}</b><span>On the offer list</span></div><div class="tile"><b>${g.audience.fromGuests}</b><span>From party guests</span></div>
+    <div class="tile"><b>${g.recovery.sent}</b><span>“Still open” emails</span></div><div class="tile"><b>${g.recovery.booked}</b><span>Won back</span></div>`;
+  $('grWait').innerHTML = '<tr><th>Day</th><th>Family</th><th>Party</th><th>Status</th><th></th></tr>' + (g.waitlist.filter((w) => w.status !== 'removed').map((w) => `<tr><td>${esc(fmtDate(w.party_date))}</td>
+    <td><b>${esc(w.parent_name)}</b><br><span class="muted">${esc(w.email)}${w.phone ? ' · ' + esc(w.phone) : ''}${w.lang === 'es' ? ' · Spanish' : ''}</span></td><td>${esc(w.package_id || 'any')}${w.kids ? ` · ${w.kids} kids` : ''}</td>
+    <td><span class="pill ${w.status === 'booked' ? 'paid' : w.status === 'notified' ? 'new' : 'pending'}">${esc(w.status)}</span></td><td><button class="btn ghost small" data-wrm="${w.id}">Remove</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Nobody waiting.</td></tr>');
+  $('grWait').querySelectorAll('[data-wrm]').forEach((b) => b.onclick = async () => { await api('/api/admin/waitlist/' + b.dataset.wrm, 'DELETE'); loadGrowth(); });
+  $('grContacts').innerHTML = '<tr><th>Family</th><th>From</th><th>Party</th><th>Status</th></tr>' + (g.contacts.map((c) => `<tr><td><b>${esc(c.name || '')}</b>${c.child_name ? ` (${esc(c.child_name)})` : ''}<br><span class="muted">${esc(c.email)}</span></td>
+    <td>${esc({ rsvp: 'RSVP', waiver: 'Waiver', booking: 'Booked a party' }[c.source] || c.source)}</td><td>${c.ref ? `${esc(c.party_child || '')} ${esc(c.party_date || '')}` : ''}</td>
+    <td>${c.unsubscribed_at ? '<span class="pill cancelled">unsubscribed</span>' : c.last_offer_at ? '<span class="pill paid">offer sent</span>' : '<span class="pill">subscribed</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No one yet.</td></tr>');
+}
+
+// ---------- Website ----------
+let SITE;
+async function loadWebsite(data) {
+  SITE = data || await api('/api/admin/site');
+  $('wsPhotos').innerHTML = SITE.photos.map((p, i) => `<figure><img src="${esc(p)}" alt=""><button class="btn ghost small" data-rmphoto="${i}">✕</button></figure>`).join('') || '<p class="muted">No photos yet. The renderings show until you add some.</p>';
+  $('wsPhotos').querySelectorAll('[data-rmphoto]').forEach((b) => b.onclick = async () => loadWebsite(await api('/api/admin/site', 'PUT', { photos: SITE.photos.filter((_, i) => i !== Number(b.dataset.rmphoto)) })));
+  $('wsVideo').value = SITE.tourVideo || '';
+  $('wsIgHandle').value = SITE.instagram.handle; $('wsIgPosts').value = SITE.instagram.posts.join('\n');
+  $('wsTitle').value = SITE.seo.pageTitle; $('wsHead').value = SITE.seo.headline; $('wsIntro').value = SITE.seo.intro; $('wsAreas').value = SITE.seo.areas.join(', ');
+  renderFaq(SITE.faq);
+}
+function renderFaq(list) {
+  $('wsFaq').innerHTML = list.map((f, i) => `<div class="faq-edit" data-faq="${i}" data-auto="${esc(f.auto || '')}">
+    <label>Question</label><input data-k="q" value="${esc(f.en.q)}">
+    ${f.auto ? `<p class="muted small">Automatic answer: ${esc(f.a)}</p>` : `<label>Answer ${f.draft ? '<span class="pill pending">needs your answer</span>' : ''}</label><textarea data-k="a" rows="2">${esc(f.en.a || '')}</textarea>`}
+    <details><summary class="muted small" style="cursor:pointer">Spanish (optional)</summary><input data-k="qEs" placeholder="${esc(f.auto ? '' : 'Pregunta')}" value="${esc(f.es.q)}">${f.auto ? '' : `<textarea data-k="aEs" rows="2" placeholder="Respuesta">${esc(f.es.a)}</textarea>`}</details>
+    <button class="btn ghost small" data-faqrm="${i}">Remove</button></div>`).join('');
+  $('wsFaq').querySelectorAll('[data-faqrm]').forEach((b) => b.onclick = () => { b.closest('.faq-edit').remove(); });
+}
+const faqFromForm = () => [...document.querySelectorAll('[data-faq]')].map((el) => Object.fromEntries([['auto', el.dataset.auto || undefined], ...[...el.querySelectorAll('[data-k]')].map((i) => [i.dataset.k, i.value])]));
+$('wsFaqAdd').onclick = () => { const list = faqFromForm().map((f) => ({ en: { q: f.q, a: f.a }, es: { q: f.qEs || '', a: f.aEs || '' }, auto: f.auto, a: '' })); list.push({ en: { q: '', a: '' }, es: { q: '', a: '' }, draft: true }); renderFaq(list); };
+$('wsFaqSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { faq: faqFromForm() })); $('wsFaqMsg').textContent = 'Saved ✓'; } catch (e) { $('wsFaqMsg').textContent = e.message; } };
+$('wsVideoSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { tourVideo: $('wsVideo').value })); $('wsVideoMsg').textContent = 'Saved ✓'; } catch (e) { $('wsVideoMsg').textContent = e.message; } };
+$('wsIgSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { instagram: { handle: $('wsIgHandle').value, posts: $('wsIgPosts').value } })); $('wsIgMsg').textContent = 'Saved ✓'; } catch (e) { $('wsIgMsg').textContent = e.message; } };
+$('wsSeoSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { seo: { pageTitle: $('wsTitle').value, headline: $('wsHead').value, intro: $('wsIntro').value, areas: $('wsAreas').value } })); $('wsSeoMsg').textContent = 'Saved ✓'; } catch (e) { $('wsSeoMsg').textContent = e.message; } };
+$('wsSnippet').onclick = async () => { const s = await api('/api/admin/seo-snippet'); navigator.clipboard?.writeText(s.jsonLd + '\n' + s.body).catch(() => {}); $('wsSeoMsg').textContent = 'Copied. Paste it into a Custom HTML block in WordPress.'; };
+$('wsPhotoIn').onchange = async () => { try { await loadWebsite(await api('/api/admin/site/photo', 'POST', { dataUrl: await shrinkPhoto($('wsPhotoIn').files[0]) })); } catch (e) { alert(e.message); } };
+
+// ---------- Setup ----------
+let SETUP;
+const DAYN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+async function loadSetup(data) {
+  SETUP = data || await api('/api/admin/setup');
+  const s = SETUP, b = s.business;
+  $('suCheck').innerHTML = s.status.map((x) => `<li>${x.ok ? '<span class="ok">✓</span>' : '<span class="todo">○</span>'} <b>${esc(x.label)}</b>${x.ok ? '' : ` <span class="muted">${esc(x.note)}</span>`}</li>`).join('');
+  $('suName').value = b.name || ''; $('suShort').value = b.shortName || ''; $('suWeb').value = b.website || ''; $('suEmail').value = b.email || ''; $('suPhone').value = b.phone || ''; $('suAddr').value = b.address || ''; $('suTag').value = b.tagline || '';
+  $('suBot').value = s.assistant.name || ''; $('suAlerts').value = (s.emails.staffAlerts || []).join(', '); $('suFrom').value = s.emails.from || ''; $('suReply').value = s.emails.replyTo || '';
+  $('suColor').value = s.brand.primaryColor; $('suAccent').value = s.brand.accentColor; $('suFont').value = s.brand.googleFont || ''; $('suRadius').value = s.brand.cornerRadius;
+  $('suLogo').innerHTML = s.brand.logoUrl ? `<img src="${esc(s.brand.logoUrl)}" alt="" style="max-height:48px;margin:4px 0">` : '<p class="muted">No logo yet.</p>';
+  renderLocs(s.locations);
+}
+function renderLocs(locs) {
+  const hours = (l) => l.partyHours || SETUP.partyHours;
+  $('suLocs').innerHTML = locs.map((l) => `<div class="faq-edit" data-loc="${esc(l.id)}">
+    <div class="row"><div><label>Name</label><input data-k="name" value="${esc(l.name)}"></div><div><label>Short name</label><input data-k="shortName" value="${esc(l.shortName || '')}"></div></div>
+    <div class="row"><div><label>Address</label><input data-k="address" value="${esc(l.address || '')}"></div><div><label>Phone</label><input data-k="phone" value="${esc(l.phone || '')}"></div></div>
+    <div class="row"><div><label>Parties at once</label><input data-k="maxConcurrentParties" type="number" min="1" max="10" value="${esc(l.maxConcurrentParties || 2)}"></div><div><label class="check" style="margin-top:30px"><input type="checkbox" data-k="public" ${l.public ? 'checked' : ''}> Taking bookings</label></div></div>
+    <label>Party hours <span class="muted">(blank = no parties that day)</span></label>
+    <div class="scroll"><table class="list">${DAYN.map((d, i) => `<tr><td>${d}</td><td><input type="time" step="1800" data-day="${i}" data-oc="open" value="${esc(hours(l)[i]?.open || '')}"></td><td><input type="time" step="1800" data-day="${i}" data-oc="close" value="${esc(hours(l)[i]?.close || '')}"></td></tr>`).join('')}</table></div></div>`).join('');
+}
+const locsFromForm = () => [...document.querySelectorAll('[data-loc]')].map((el) => {
+  const o = { id: el.dataset.loc };
+  el.querySelectorAll('[data-k]').forEach((i) => { o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.value; });
+  o.partyHours = {};
+  for (let d = 0; d < 7; d++) { const op = el.querySelector(`[data-day="${d}"][data-oc="open"]`).value, cl = el.querySelector(`[data-day="${d}"][data-oc="close"]`).value; o.partyHours[d] = op && cl ? { open: op, close: cl } : null; }
+  return o;
+});
+const saveSetup = async (body, msg) => { try { await loadSetup(await api('/api/admin/setup', 'PUT', body)); $(msg).textContent = 'Saved ✓'; loadLocations(); } catch (e) { $(msg).textContent = e.message; } };
+$('suBizSave').onclick = () => saveSetup({ business: { name: $('suName').value, shortName: $('suShort').value, website: $('suWeb').value, email: $('suEmail').value, phone: $('suPhone').value, address: $('suAddr').value, tagline: $('suTag').value },
+  assistant: { name: $('suBot').value }, emails: { staffAlerts: $('suAlerts').value, from: $('suFrom').value, replyTo: $('suReply').value } }, 'suBizMsg');
+$('suBrandSave').onclick = () => saveSetup({ brand: { primaryColor: $('suColor').value, accentColor: $('suAccent').value, googleFont: $('suFont').value, cornerRadius: $('suRadius').value } }, 'suBrandMsg');
+$('suLocSave').onclick = () => saveSetup({ locations: locsFromForm() }, 'suLocMsg');
+$('suLocAdd').onclick = () => { const id = prompt('Short id for the new location (letters only, e.g. "huntington")'); if (!id) return; renderLocs([...locsFromForm(), { id: id.toLowerCase().replace(/[^a-z0-9-]/g, ''), name: 'New location', public: false, partyHours: SETUP.partyHours }]); };
+$('suLogoIn').onchange = async () => { try { await loadSetup(await api('/api/admin/setup/logo', 'POST', { dataUrl: await shrinkPhoto($('suLogoIn').files[0], 'image/png') })); } catch (e) { $('suBrandMsg').textContent = e.message; } };
+
+function refresh() { return Promise.all([loadInsights(), loadGrowth(), loadWebsite(), loadSetup(), loadSponsors(), loadMarketplace(), loadSummary(), loadCalendar(), loadBookings(), loadLeads(), loadPricing(), loadChats(), loadWaivers(), loadGifts(), loadReviews(), loadWaiverText(), loadEmails(), loadQbo(), loadFeed()]); }
 
 // ---------- Waivers ----------
 let wTimer;
@@ -583,10 +813,14 @@ async function loadWaivers() {
 $('wq').oninput = () => { clearTimeout(wTimer); wTimer = setTimeout(loadWaivers, 250); };
 
 async function loadWaiverText() {
+  $('waiverTextEs').value = (await api('/api/admin/waiver-text-es')).text;
   const w = await api('/api/admin/waiver-text');
   $('waiverText').value = w.text;
   $('waiverMode').innerHTML = w.isSample ? '⚠️ This is <b>sample text</b>. Replace it with the waiver from your attorney or insurance carrier before using it with customers.' : `Current version: ${esc(w.version)}`;
 }
+$('waiverSaveEs').onclick = async () => {
+  try { await api('/api/admin/waiver-text', 'PUT', { text: $('waiverTextEs').value, lang: 'es' }); $('waiverMsgEs').textContent = 'Saved ✓'; } catch (e) { $('waiverMsgEs').textContent = e.message; }
+};
 $('waiverSave').onclick = async () => {
   try { await api('/api/admin/waiver-text', 'PUT', { text: $('waiverText').value }); $('waiverMsg').textContent = 'Saved ✓'; loadWaiverText(); } catch (e) { $('waiverMsg').textContent = e.message; }
 };
@@ -699,13 +933,18 @@ async function loadFeed() {
 }
 
 // ---------- Pricing ----------
-let PRICING, priceEdits = { packages: {}, addOns: {}, party: {} };
+let PRICING, priceEdits = { packages: {}, addOns: {}, party: {}, timePricing: {} };
 const dollarsIn = (c) => (c / 100).toFixed(2);
 async function loadPricing() {
   PRICING = await api('/api/admin/pricing');
-  priceEdits = { packages: {}, addOns: {}, party: {} };
+  priceEdits = { packages: {}, addOns: {}, party: {}, timePricing: {} };
   $('priceSave').disabled = true; $('priceMsg').textContent = '';
   document.querySelectorAll('[data-party]').forEach((i) => { i.value = PRICING.party[i.dataset.party]; i.classList.remove('changed'); });
+  $('priceTiming').innerHTML = '<tr><th>On</th><th>Window</th><th>Days & times</th><th>Change $</th></tr>' + PRICING.timePricing.map((r) => `<tr>
+      <td><input type="checkbox" data-g="timePricing" data-id="${r.id}" data-f="active" ${r.active !== false ? 'checked' : ''}></td>
+      <td class="name"><input data-g="timePricing" data-id="${r.id}" data-f="label" value="${esc(r.label)}"></td>
+      <td>${esc(r.days.map((x) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x]).join(', '))} · starts ${esc(r.from)}–${esc(r.to)}</td>
+      <td><input type="number" step="1" data-g="timePricing" data-id="${r.id}" data-f="adjustCents" data-money value="${(r.adjustCents / 100).toFixed(0)}"></td></tr>`).join('');
   $('pricePackages').innerHTML = '<tr><th>On</th><th>Package</th><th>Price $</th><th>Kids incl.</th><th>Extra kid $</th></tr>' +
     PRICING.packages.map((p) => `<tr>
       <td><input type="checkbox" data-g="packages" data-id="${p.id}" data-f="active" ${p.active !== false ? 'checked' : ''}></td>
@@ -843,7 +1082,7 @@ async function loadQbo() {
 
 document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['calendar', 'bookings', 'leads', 'reports', 'pricing', 'chats', 'waivers', 'gifts', 'reviews', 'sponsors', 'marketplace', 'emails', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
+  ['calendar', 'bookings', 'leads', 'insights', 'growth', 'reports', 'pricing', 'chats', 'waivers', 'gifts', 'reviews', 'sponsors', 'marketplace', 'emails', 'website', 'setup', 'settings'].forEach((n) => $('tab-' + n).classList.toggle('hidden', n !== t.dataset.tab));
   history.replaceState(null, '', '#' + t.dataset.tab);
 });
 const startTab = location.hash.slice(1);

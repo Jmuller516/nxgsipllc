@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sports · Events · Parties</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    :root {
+      --night: #0a1a3a; --chalk: #f5f8fc; --turf: #1d7a4c;
+      --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+      --text: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body.home { background: var(--chalk); color: #10203f; font-family: var(--text); }
+    body.home main { max-width: none; padding: 0; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)); }
+
+    /* ---------- top bar ---------- */
+    .bar { position: absolute; inset: 0 0 auto; z-index: 3; }
+    .bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; }
+    .mark { font-family: var(--display); font-weight: 900; font-size: 1.6rem; letter-spacing: .02em; color: #fff; text-decoration: none; }
+    .mark img { max-height: 40px; display: block; }
+    .bar nav { display: flex; gap: 8px; align-items: center; }
+    .bar .btn { background: var(--accent, #ff7a1a); border-color: var(--accent, #ff7a1a); color: #fff; }
+    .lang-switch { background: rgb(255 255 255 / .14); color: #fff; border: 1px solid rgb(255 255 255 / .35); border-radius: 99px; padding: 8px 14px; font: 600 .9rem var(--text); cursor: pointer; }
+
+    /* ---------- hero: the three words are the menu ---------- */
+    .hero-home { position: relative; min-height: min(92vh, 860px); background: var(--night); color: #fff; overflow: hidden; display: flex; align-items: flex-end; }
+    .hero-home .shot { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity .5s ease; }
+    .hero-home .shot.on { opacity: 1; }
+    .hero-home::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(10 26 58 / .92) 0%, rgb(10 26 58 / .7) 45%, rgb(10 26 58 / .15) 100%), linear-gradient(0deg, rgb(10 26 58 / .85), transparent 45%); }
+    .hero-home > .wrap { position: relative; z-index: 2; width: 100%; padding-bottom: clamp(28px, 6vh, 64px); padding-top: 104px; }
+    .where { font-weight: 500; font-size: 1.05rem; color: rgb(255 255 255 / .85); margin: 0 0 6px; }
+    .words { list-style: none; margin: 0; padding: 0; }
+    .words a { display: inline-block; font-family: var(--display); font-weight: 900; font-size: clamp(4rem, 15vw, 11rem); line-height: .86; letter-spacing: -.005em; color: rgb(255 255 255 / .38); text-decoration: none; text-transform: uppercase; transition: color .25s ease, transform .25s ease; }
+    .words a[aria-current="true"] { color: #fff; transform: translateX(.08em); }
+    .words a[aria-current="true"]::after { content: ""; display: inline-block; width: .18em; height: .18em; margin-left: .12em; background: var(--accent, #ff7a1a); border-radius: 50%; vertical-align: .12em; }
+    .words a:focus-visible { outline: 3px solid var(--accent, #ff7a1a); outline-offset: 4px; color: #fff; }
+    .pitch { max-width: 46ch; font-size: clamp(1.05rem, 1.6vw, 1.25rem); line-height: 1.45; margin: 18px 0 18px; min-height: 2.9em; }
+    .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-cta .btn { font-size: 1.05rem; padding: 14px 22px; }
+    .hero-cta .ghost { background: transparent; color: #fff; border: 2px solid rgb(255 255 255 / .6); }
+    .note { position: absolute; right: 16px; bottom: 12px; z-index: 2; font-size: .72rem; color: rgb(255 255 255 / .7); }
+    /* One entrance: the words come in like a scoreboard, once. */
+    @media (prefers-reduced-motion: no-preference) {
+      .words li { animation: board .7s cubic-bezier(.2, .8, .2, 1) both; }
+      .words li:nth-child(2) { animation-delay: .12s; } .words li:nth-child(3) { animation-delay: .24s; }
+      @keyframes board { from { opacity: 0; transform: translateY(.4em) rotateX(70deg); } to { opacity: 1; transform: none; } }
+    }
+
+    /* ---------- the three sections ---------- */
+    .row { display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(20px, 4vw, 56px); align-items: center; padding: clamp(48px, 8vw, 96px) 0; border-top: 1px solid #d9e1ee; }
+    .row:first-of-type { border-top: 0; }
+    .row.flip > .pic { order: 2; }
+    .pic { border-radius: 18px; overflow: hidden; aspect-ratio: 4 / 3; background: #dfe6f1; }
+    .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .row h2 { font-family: var(--display); font-weight: 900; font-size: clamp(2.4rem, 5vw, 3.8rem); line-height: .95; margin: 0 0 14px; color: var(--night); }
+    .row p { font-size: 1.1rem; line-height: 1.55; max-width: 52ch; margin: 0 0 18px; }
+    .kicker { font-family: var(--display); font-weight: 700; font-size: 1.3rem; color: var(--brand); margin: 0 0 4px; }
+    .prices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 20px; padding: 0; list-style: none; }
+    .prices li { border-left: 4px solid var(--brand); padding: 4px 0 4px 12px; }
+    .prices b { display: block; font-size: 1.05rem; }
+    .prices .amt { display: block; margin: 2px 0; font-family: var(--display); font-weight: 900; font-size: 2rem; line-height: 1; color: var(--night); }
+    .prices small { color: var(--muted); }
+    .ticks { list-style: none; padding: 0; margin: 0 0 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .ticks li { background: #e6edf8; color: var(--night); border-radius: 99px; padding: 6px 12px; font-weight: 600; font-size: .95rem; }
+    .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ctas .ghost { background: transparent; }
+    body.home .btn, .bar .mark { text-decoration: none; }
+    .foot-home a { text-underline-offset: 3px; }
+
+    /* ---------- footer ---------- */
+    .foot-home { background: var(--night); color: #dfe7f5; padding: 40px 0 calc(28px + env(safe-area-inset-bottom)); margin-top: 24px; }
+    .foot-home .wrap { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+    .foot-home h3 { font-family: var(--display); font-weight: 900; font-size: 1.6rem; margin: 0 0 6px; color: #fff; }
+    .foot-home a { color: #fff; }
+    .foot-home ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+
+    @media (max-width: 760px) {
+      .row, .foot-home .wrap { grid-template-columns: 1fr; }
+      .row.flip > .pic { order: 0; }
+      .hero-home { min-height: 88vh; }
+      .bar .btn.small-hide { display: none; }
+    }
+  </style>
+</head>
+<body class="home">
+<main>
+  <header class="hero-home" id="top">
+    <div class="shot on" data-shot="parties" style="background-image:url('/static/img/lounge.jpg')"></div>
+    <div class="shot" data-shot="sports" style="background-image:url('/static/img/field.jpg')"></div>
+    <div class="shot" data-shot="events" style="background-image:url('/static/img/cheer.jpg')"></div>
+    <div class="bar"><div class="wrap">
+      <a class="mark" href="/" id="mark">NXGS</a>
+      <nav><a class="btn small-hide" id="topBook" href="/book" data-i18n="bookParty"></a><span id="langBox"></span></nav>
+    </div></div>
+    <div class="wrap">
+      <p class="where" id="where"></p>
+      <h1 class="visually-hidden" id="h1"></h1>
+      <ul class="words" id="words">
+        <li><a href="#sports" data-word="sports" data-i18n="heroSports"></a></li>
+        <li><a href="#events" data-word="events" data-i18n="heroEvents"></a></li>
+        <li><a href="#parties" data-word="parties" data-i18n="heroParties" aria-current="true"></a></li>
+      </ul>
+      <p class="pitch" id="pitch" aria-live="polite"></p>
+      <div class="hero-cta" id="heroCta"></div>
+    </div>
+    <span class="note" data-i18n="renderingsNote"></span>
+  </header>
+
+  <div class="wrap">
+    <section class="row" id="parties">
+      <div class="pic"><img src="/static/img/gameroom.jpg" alt="" loading="lazy"></div>
+      <div>
+        <p class="kicker" data-i18n="heroParties"></p>
+        <h2 data-i18n="partiesH"></h2>
+        <p data-i18n="partiesP"></p>
+        <ul class="prices" id="prices"></ul>
+        <div class="ctas"><a class="btn" id="partyBook" href="/book" data-i18n="bookParty"></a><a class="btn ghost" id="partyCal" href="/calendar" data-i18n="seeDates"></a></div>
+      </div>
+    </section>
+
+    <section class="row flip" id="events">
+      <div class="pic"><img src="/static/img/cheer.jpg" alt="" loading="lazy"></div>
+      <div>
+        <p class="kicker" data-i18n="heroEvents"></p>
+        <h2 data-i18n="eventsH"></h2>
+        <p data-i18n="eventsP"></p>
+        <ul class="ticks" id="eventsList"></ul>
+        <div class="ctas"><a class="btn" id="eventsBtn" href="/book?tab=inquiry&type=corporate" data-i18n="requestQuote"></a></div>
+      </div>
+    </section>
+
+    <section class="row" id="sports">
+      <div class="pic"><img src="/static/img/training.jpg" alt="" loading="lazy"></div>
+      <div>
+        <p class="kicker" data-i18n="heroSports"></p>
+        <h2 data-i18n="sportsH"></h2>
+        <p data-i18n="sportsP"></p>
+        <ul class="ticks" id="sportsList"></ul>
+        <div class="ctas"><a class="btn" id="sportsBtn" href="/book?tab=inquiry&type=team" data-i18n="askField"></a></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot-home">
+    <div class="wrap">
+      <div><h3 data-i18n="visit"></h3><p id="addr"></p><div id="sponsorBox"></div></div>
+      <ul>
+        <li><a id="fBook" href="/book" data-i18n="bookParty"></a></li>
+        <li><a id="fCal" href="/calendar" data-i18n="calendar"></a></li>
+        <li><a id="fGift" href="/gift-cards" data-i18n="giftCards"></a></li>
+        <li><a href="/partners" data-i18n="partners"></a></li>
+      </ul>
+    </div>
+  </footer>
+</main>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/sponsors.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const t = NXI18N.t, LANG = NXI18N.lang;
+const q = LANG === 'es' ? 'lang=es' : '';
+const withLang = (u) => (q ? u + (u.includes('?') ? '&' : '?') + q : u);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money0 = (c) => '$' + Math.round(c / 100);
+
+// What each word in the hero says and where it goes.
+const WORDS = {
+  sports: { line: 'heroSportsLine', cta: [['askField', '/book?tab=inquiry&type=team']] },
+  events: { line: 'heroEventsLine', cta: [['requestQuote', '/book?tab=inquiry&type=corporate']] },
+  parties: { line: 'heroPartiesLine', cta: [['bookParty', '/book'], ['seeDates', '/calendar']] },
+};
+
+function show(word) {
+  document.querySelectorAll('[data-word]').forEach((a) => a.setAttribute('aria-current', String(a.dataset.word === word)));
+  document.querySelectorAll('[data-shot]').forEach((s) => s.classList.toggle('on', s.dataset.shot === word));
+  $('pitch').textContent = t(WORDS[word].line);
+  $('heroCta').innerHTML = WORDS[word].cta.map(([k, u], i) => `<a class="btn ${i ? 'ghost' : ''}" href="${esc(withLang(u))}">${esc(t(k))}</a>`).join('');
+}
+
+async function init() {
+  NXI18N.apply();
+  NXI18N.toggle($('langBox'));
+  for (const id of ['topBook', 'partyBook', 'partyCal', 'eventsBtn', 'sportsBtn', 'fBook', 'fCal']) $(id).href = withLang($(id).getAttribute('href'));
+  $('eventsList').innerHTML = t('eventsList').map((x) => `<li>${esc(x)}</li>`).join('');
+  $('sportsList').innerHTML = t('sportsList').map((x) => `<li>${esc(x)}</li>`).join('');
+  // Hover or focus a word to preview it; tap or click goes to its section.
+  document.querySelectorAll('[data-word]').forEach((a) => {
+    a.addEventListener('mouseenter', () => show(a.dataset.word));
+    a.addEventListener('focus', () => show(a.dataset.word));
+  });
+  show('parties');
+
+  const CFG = await (await fetch('/api/config' + (q ? '?' + q : ''))).json();
+  const loc = CFG.locations.find((l) => l.id === CFG.defaultLocation) || CFG.locations[0];
+  document.title = `${CFG.business.shortName || CFG.business.name} · ${t('heroSports')} · ${t('heroEvents')} · ${t('heroParties')}`;
+  $('h1').textContent = t('homeTitle', loc.shortName || loc.name);
+  $('where').textContent = `${CFG.business.name} · ${loc.shortName || loc.name}, NY`;
+  if (CFG.brand.logoUrl) $('mark').innerHTML = `<img src="${esc(CFG.brand.logoUrl)}" alt="${esc(CFG.business.name)}">`;
+  else $('mark').textContent = CFG.business.shortName || 'NXGS';
+  $('addr').innerHTML = `<b>${esc(loc.name)}</b><br>${esc(loc.address)}${loc.phone ? `<br>${esc(loc.phone)}` : ''}`;
+  $('prices').innerHTML = CFG.packages.map((p) => `<li><b>${esc(p.name)}</b><span class="amt">${money0(p.priceCents)}</span><small>${esc(t('includesN', p.includedKids))}</small></li>`).join('');
+  NXSponsors.mount($('sponsorBox'), 'booking', loc.id);
+}
+
+if (window.parent !== window) {
+  const post = () => window.parent.postMessage({ type: 'nxgs:height', height: document.documentElement.scrollHeight }, '*');
+  new ResizeObserver(post).observe(document.body);
+}
+init().catch((e) => console.error(e));
+</script>
+<script src="/static/chat.js" defer></script>
+</body>
+</html>

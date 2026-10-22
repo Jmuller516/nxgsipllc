@@ -11,21 +11,32 @@ const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 function createGuests(db, svc, opts = {}) {
   const cfg = opts.config || config;
   const clock = opts.clock || (() => new Date());
+  const audience = opts.audience || null;
+  const langOf = (l) => ((cfg.languages || ['en']).includes(l) ? l : 'en');
 
   // ---------- waiver text ----------
-  function waiverText() {
+  // A Spanish waiver is used only once staff paste one in (it should come from your attorney too);
+  // until then Spanish-speaking families see the English waiver with a note.
+  function waiverText(lang = 'en') {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'waiver_text'").get();
-    const text = row ? JSON.parse(row.value) : cfg.waiver.sampleText;
+    const es = lang === 'es' ? db.prepare("SELECT value FROM settings WHERE key = 'waiver_text_es'").get() : null;
+    const text = es ? JSON.parse(es.value) : row ? JSON.parse(row.value) : cfg.waiver.sampleText;
     const version = crypto.createHash('sha256').update(text).digest('hex').slice(0, 12);
-    return { title: cfg.waiver.title, text, version, isSample: !row, validDays: cfg.waiver.validDays };
+    return { title: cfg.waiver.title, text, version, isSample: !row, validDays: cfg.waiver.validDays, lang: es ? 'es' : 'en', translationMissing: lang === 'es' && !es };
   }
 
-  function setWaiverText(text) {
+  function setWaiverText(text, lang = 'en') {
     const t = String(text || '').replace(/\r/g, '').trim();
+    const k = lang === 'es' ? 'waiver_text_es' : 'waiver_text';
+    if (lang === 'es' && !t) { db.prepare("DELETE FROM settings WHERE key = 'waiver_text_es'").run(); return waiverText(); }
     if (t.length < 50) throw new BookingError('The waiver text looks too short.');
-    db.prepare(`INSERT INTO settings (key, value) VALUES ('waiver_text', ?)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`).run(JSON.stringify(t.slice(0, 20000)));
+    db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`).run(k, JSON.stringify(t.slice(0, 20000)));
     return waiverText();
+  }
+  function spanishWaiver() {
+    const r = db.prepare("SELECT value FROM settings WHERE key = 'waiver_text_es'").get();
+    return r ? JSON.parse(r.value) : '';
   }
 
   // ---------- waivers ----------
@@ -52,7 +63,7 @@ function createGuests(db, svc, opts = {}) {
     let bookingId = null;
     if (input.inviteToken) bookingId = svc.getByInvite(input.inviteToken)?.id || null;
 
-    const { version } = waiverText();
+    const { version } = waiverText(langOf(input.lang));
     let sigPath;
     try { sigPath = media.saveDataUrl(db, input.signature, { maxBytes: 400_000, label: 'signature' }); } catch (e) { throw new BookingError(e.message); }
     const now = clock();
@@ -63,6 +74,10 @@ function createGuests(db, svc, opts = {}) {
       version, bookingId, childName, clean(input.childBirthdate, 10), guardianName, email, clean(input.guardianPhone, 40),
       clean(input.emergencyName, 120), clean(input.emergencyPhone, 40), clean(input.medicalNotes, 1000), typed, sigPath,
       clean(ip, 64), clean(userAgent, 300), now.toISOString(), expires.toISOString());
+    if (input.marketingOptIn) {
+      db.prepare('UPDATE waivers SET marketing_opt_in = 1 WHERE id = ?').run(Number(info.lastInsertRowid));
+      audience?.optIn({ email, name: guardianName, childName, phone: input.guardianPhone, source: 'waiver', bookingId, lang: langOf(input.lang) });
+    }
     return { id: Number(info.lastInsertRowid), childName, expiresAt: expires.toISOString() };
   }
 
@@ -103,6 +118,10 @@ function createGuests(db, svc, opts = {}) {
       if (yes >= 60) throw new BookingError('This party has a lot of replies already. Please contact the host.');
       token = crypto.randomBytes(12).toString('hex');
       db.prepare(`INSERT INTO rsvps (booking_id, token, child_name, parent_name, email, phone, attending, allergies) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(b.id, token, ...fields);
+    }
+    if (input.marketingOptIn && email) {
+      db.prepare('UPDATE rsvps SET marketing_opt_in = 1 WHERE token = ?').run(token);
+      audience?.optIn({ email, name: parentName, childName, phone: input.phone, source: 'rsvp', bookingId: b.id, lang: langOf(input.lang) });
     }
     const waiver = attending === 'yes' ? findWaiver(email, childName) : null;
     return { rsvpToken: token, attending, waiverOnFile: !!waiver, waiverExpires: waiver?.expires_at || null };
@@ -166,7 +185,7 @@ function createGuests(db, svc, opts = {}) {
     };
   }
 
-  return { waiverText, setWaiverText, findWaiver, signWaiver, searchWaivers, getWaiver, rsvp, partyGuests, invitation };
+  return { spanishWaiver, waiverText, setWaiverText, findWaiver, signWaiver, searchWaivers, getWaiver, rsvp, partyGuests, invitation };
 }
 
 module.exports = { createGuests };

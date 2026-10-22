@@ -7,14 +7,20 @@ const config = require('./config');
 const PACKAGE_FIELDS = { priceCents: 'int', extraKidCents: 'int', includedKids: 'int', name: 'text', description: 'text', includes: 'longtext', active: 'bool' };
 const ADDON_FIELDS = { priceCents: 'int', costCents: 'int', minQty: 'int', leadDays: 'int', name: 'text', detail: 'text', includes: 'longtext', active: 'bool' };
 const PARTY_FIELDS = { depositPercent: 'int', balanceDueDaysBefore: 'int', taxRatePercent: 'num' };
+const TIME_FIELDS = { adjustCents: 'signed', active: 'bool', label: 'text' };
 
 // Remember the starting values so "reset" works and overrides can be re-applied cleanly.
-const defaults = JSON.parse(JSON.stringify({ packages: config.packages, addOns: config.addOns, payments: config.payments, tax: config.tax }));
+const defaults = JSON.parse(JSON.stringify({ packages: config.packages, addOns: config.addOns, payments: config.payments, tax: config.tax, timePricing: config.timePricing || [] }));
 
 function clean(value, type) {
   if (type === 'int') {
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0 || n > 10_000_000) throw new Error('Numbers must be zero or more.');
+    return Math.round(n);
+  }
+  if (type === 'signed') {
+    const n = Number(value);
+    if (!Number.isFinite(n) || Math.abs(n) > 1_000_000) throw new Error('Invalid amount.');
     return Math.round(n);
   }
   if (type === 'num') {
@@ -31,7 +37,8 @@ function clean(value, type) {
 
 function load(db) {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'price_overrides'").get();
-  return row ? JSON.parse(row.value) : { packages: {}, addOns: {}, party: {} };
+  const o = row ? JSON.parse(row.value) : {};
+  return { packages: {}, addOns: {}, party: {}, timePricing: {}, ...o };
 }
 
 /** Apply saved overrides on top of the starting prices (mutates the shared config). */
@@ -41,6 +48,7 @@ function apply(db, cfg = config) {
   cfg.addOns.splice(0, cfg.addOns.length, ...defaults.addOns.map((a) => ({ active: true, photo: `/static/img/addons/${a.id}.svg`, ...a, ...(o.addOns[a.id] || {}) })));
   Object.assign(cfg.payments, defaults.payments, pick(o.party, ['depositPercent', 'balanceDueDaysBefore']));
   cfg.tax.rate = o.party.taxRatePercent != null ? o.party.taxRatePercent / 100 : defaults.tax.rate;
+  cfg.timePricing = defaults.timePricing.map((r) => ({ active: true, ...r, ...(o.timePricing[r.id] || {}) }));
   return cfg;
 }
 
@@ -60,6 +68,11 @@ function save(db, edits, cfg = config) {
         target[k] = clean(v, fields[k]);
       }
     }
+  }
+  for (const [id, changes] of Object.entries(edits.timePricing || {})) {
+    if (!defaults.timePricing.some((r) => r.id === id)) throw new Error(`Unknown item: ${id}`);
+    const target = (o.timePricing[id] ||= {});
+    for (const [k, v] of Object.entries(changes)) if (TIME_FIELDS[k]) target[k] = clean(v, TIME_FIELDS[k]);
   }
   for (const [k, v] of Object.entries(edits.party || {})) {
     if (!PARTY_FIELDS[k]) continue;
@@ -90,7 +103,7 @@ function reset(db, cfg = config) {
   const photos = Object.fromEntries(Object.entries(load(db).addOns).filter(([, v]) => v.photo).map(([k, v]) => [k, { photo: v.photo }]));
   db.prepare("DELETE FROM settings WHERE key = 'price_overrides'").run();
   if (Object.keys(photos).length) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('price_overrides', ?)").run(JSON.stringify({ packages: {}, addOns: photos, party: {} }));
+    db.prepare("INSERT INTO settings (key, value) VALUES ('price_overrides', ?)").run(JSON.stringify({ packages: {}, addOns: photos, party: {}, timePricing: {} }));
   }
   return apply(db, cfg);
 }
@@ -101,6 +114,7 @@ function view(cfg = config) {
     packages: cfg.packages.map((p) => ({ ...p, startingPriceCents: defaults.packages.find((d) => d.id === p.id)?.priceCents })),
     addOns: cfg.addOns.filter((a) => !a.marketplace).map((a) => ({ ...a, startingPriceCents: defaults.addOns.find((d) => d.id === a.id)?.priceCents })),
     addOnCategories: cfg.addOnCategories,
+    timePricing: cfg.timePricing.map((r) => ({ ...r, startingCents: defaults.timePricing.find((d) => d.id === r.id)?.adjustCents })),
     party: { depositPercent: cfg.payments.depositPercent, balanceDueDaysBefore: cfg.payments.balanceDueDaysBefore, taxRatePercent: +(cfg.tax.rate * 100).toFixed(4) },
   };
 }
