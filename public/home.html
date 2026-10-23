@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sports · Events · Parties</title>
+  <title>Events · Parties</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/theme.css">
@@ -90,7 +90,6 @@
 <main>
   <header class="hero-home" id="top">
     <div class="shot on" data-shot="parties" style="background-image:url('/static/img/lounge.jpg')"></div>
-    <div class="shot" data-shot="sports" style="background-image:url('/static/img/field.jpg')"></div>
     <div class="shot" data-shot="events" style="background-image:url('/static/img/cheer.jpg')"></div>
     <div class="bar"><div class="wrap">
       <a class="mark" href="/" id="mark">NXGS</a>
@@ -100,7 +99,6 @@
       <p class="where" id="where"></p>
       <h1 class="visually-hidden" id="h1"></h1>
       <ul class="words" id="words">
-        <li><a href="#sports" data-word="sports" data-i18n="heroSports"></a></li>
         <li><a href="#events" data-word="events" data-i18n="heroEvents"></a></li>
         <li><a href="#parties" data-word="parties" data-i18n="heroParties" aria-current="true"></a></li>
       </ul>
@@ -132,17 +130,6 @@
         <div class="ctas"><a class="btn" id="eventsBtn" href="/book?tab=inquiry&type=corporate" data-i18n="requestQuote"></a></div>
       </div>
     </section>
-
-    <section class="row" id="sports">
-      <div class="pic"><img src="/static/img/field-2.jpg" alt="" loading="lazy"></div>
-      <div>
-        <p class="kicker" data-i18n="heroSports"></p>
-        <h2 data-i18n="sportsH"></h2>
-        <p data-i18n="sportsP"></p>
-        <ul class="ticks" id="sportsList"></ul>
-        <div class="ctas"><a class="btn" id="sportsBtn" href="/book?tab=inquiry&type=team" data-i18n="askField"></a></div>
-      </div>
-    </section>
   </div>
 
   <footer class="foot-home">
@@ -170,7 +157,6 @@ const money0 = (c) => '$' + Math.round(c / 100);
 
 // What each word in the hero says and where it goes.
 const WORDS = {
-  sports: { line: 'heroSportsLine', cta: [['askField', '/book?tab=inquiry&type=team']] },
   events: { line: 'heroEventsLine', cta: [['requestQuote', '/book?tab=inquiry&type=corporate']] },
   parties: { line: 'heroPartiesLine', cta: [['bookParty', '/book'], ['seeDates', '/calendar']] },
 };
@@ -185,9 +171,8 @@ function show(word) {
 async function init() {
   NXI18N.apply();
   NXI18N.toggle($('langBox'));
-  for (const id of ['topBook', 'partyBook', 'partyCal', 'eventsBtn', 'sportsBtn', 'fBook', 'fCal']) $(id).href = withLang($(id).getAttribute('href'));
+  for (const id of ['topBook', 'partyBook', 'partyCal', 'eventsBtn', 'fBook', 'fCal']) $(id).href = withLang($(id).getAttribute('href'));
   $('eventsList').innerHTML = t('eventsList').map((x) => `<li>${esc(x)}</li>`).join('');
-  $('sportsList').innerHTML = t('sportsList').map((x) => `<li>${esc(x)}</li>`).join('');
   // Hover or focus a word to preview it; tap or click goes to its section.
   document.querySelectorAll('[data-word]').forEach((a) => {
     a.addEventListener('mouseenter', () => show(a.dataset.word));
@@ -197,7 +182,7 @@ async function init() {
 
   const CFG = await (await fetch('/api/config' + (q ? '?' + q : ''))).json();
   const loc = CFG.locations.find((l) => l.id === CFG.defaultLocation) || CFG.locations[0];
-  document.title = `${CFG.business.shortName || CFG.business.name} · ${t('heroSports')} · ${t('heroEvents')} · ${t('heroParties')}`;
+  document.title = `${CFG.business.shortName || CFG.business.name} · ${t('heroEvents')} · ${t('heroParties')}`;
   $('h1').textContent = t('homeTitle', loc.shortName || loc.name);
   $('where').textContent = `${CFG.business.name} · ${loc.shortName || loc.name}, NY`;
   if (CFG.brand.logoUrl) $('mark').innerHTML = `<img src="${esc(CFG.brand.logoUrl)}" alt="${esc(CFG.business.name)}">`;
