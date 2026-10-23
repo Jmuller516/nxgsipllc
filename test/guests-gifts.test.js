@@ -468,6 +468,7 @@ test('expanded event types: card show lead stores vendors + end date; /events se
   assert.equal(leads.json[0].end_date, '2027-03-07');
   const cfg = await ctx.call('GET', '/api/config');
   for (const id of ['expo', 'cardshow', 'market', 'tournament', 'fundraiser', 'school', 'teambuilding']) assert.ok(cfg.json.inquiryTypes.some((x) => x.id === id), id);
+  assert.ok(cfg.json.eventItems.cardshow.includes('binders'));
   const page = await ctx.call('GET', '/events');
   assert.equal(page.status, 200);
   assert.match(page.text, /collectibles shows/);

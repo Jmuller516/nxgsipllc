@@ -302,6 +302,26 @@ module.exports = {
     payoutTerms: 'Net 15 after the party',
   },
 
+  // Things customers can add to an event inquiry. Food and drinks come through our catering partners (outside catering only).
+  eventItems: {
+    cardshow: ['Card sleeves', 'protective cases', 'binders', 'display stands', 'NXGS merchandise', 'snacks', 'drinks'],
+    market: ['NXGS apparel', 'reusable shopping bags', 'seasonal gift baskets', 'personalized gifts', 'coffee', 'refreshments'],
+    celebration: ['Party packages', 'pizza', 'drinks', 'cakes (bakery partner)', 'balloon towers', 'personalized gift bags', 'custom shirts', 'cups', 'engraved favors'],
+    corporate: ['Catering packages', 'coffee service', 'branded shirts', 'notebooks', 'pens', 'water bottles', 'employee gift packages'],
+    teambuilding: ['Catering packages', 'coffee service', 'branded shirts', 'water bottles', 'employee gift packages'],
+    networking: ['Coffee', 'breakfast items', 'appetizers', 'drinks', 'notebooks', 'pens', 'NXGS merchandise'],
+    expo: ['Food', 'drinks', 'reusable tote bags', 'lanyards', 'notebooks', 'phone chargers', 'event merchandise'],
+    gaming: ['Gaming snacks', 'drinks', 'tournament shirts', 'mouse pads', 'controller grips', 'charging cables', 'collectible merchandise'],
+    watchparty: ['Pizza', 'wings', 'pretzels', 'popcorn', 'nachos', 'drinks', 'NXGS fan shirts', 'souvenir cups'],
+    trivia: ['Shareable snack platters', 'pizza', 'desserts', 'drinks', 'themed shirts', 'souvenir cups'],
+    movie: ['Popcorn', 'candy', 'drinks', 'pizza', 'blankets', 'glow bracelets', 'family snack bundles'],
+    entertainment: ['Appetizers', 'snack baskets', 'desserts', 'drinks', 'event shirts or posters (with the performer’s approval)'],
+    school: ['Refreshments', 'photo prints', 'custom class shirts', 'graduation gifts', 'personalized tumblers', 'party favors'],
+    fundraiser: ['Food', 'drinks', 'cause-themed shirts', 'bracelets', 'personalized gifts', 'merchandise bundles benefiting the organization'],
+    banquet: ['Meal packages', 'trophies', 'medals', 'plaques', 'engraved gifts', 'team shirts', 'personalized water bottles'],
+    workshop: ['Activity kits', 'art supplies', 'project materials', 'workbooks', 'aprons', 'snacks', 'take-home kits'],
+  },
+
   inquiryTypes: [
     { id: 'corporate', name: 'Company outing / corporate event' },
     { id: 'teambuilding', name: 'Team-building day' },

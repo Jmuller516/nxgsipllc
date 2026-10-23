@@ -103,6 +103,7 @@ function createApp(db, opts = {}) {
     addOns: config.addOns.filter((a) => a.active !== false).map(({ costCents, vendor, ...a }) => a), // never expose cost or vendor
     addOnCategories: config.addOnCategories,
     inquiryTypes: config.inquiryTypes.filter((t) => !t.hidden),
+    eventItems: config.eventItems,
     sponsorPackages: config.sponsorPackages.map(({ suggestedMonthlyCents, ...p }) => p),
     marketplace: { payoutTerms: config.marketplace.payoutTerms },
     party: { phases: config.party.phases, maxKids: config.party.maxKids },

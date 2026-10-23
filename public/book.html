@@ -130,6 +130,7 @@
         <div id="vendorBox" class="hidden"><label for="iVendors" data-i18n="vendorCount"></label><input id="iVendors" type="number" min="1" inputmode="numeric"></div>
       </div>
       <label for="iMsg" data-i18n="details"></label><textarea id="iMsg" rows="4"></textarea>
+      <div id="eventItemsBox" class="hidden"><label><span data-i18n="addItems"></span> <span class="muted" data-i18n="optional"></span></label><div id="eventItemsList"></div><p class="muted" style="font-size:.85rem" data-i18n="itemsNote"></p></div>
       <div id="corpPartners" class="hidden"><label><span data-i18n="partnerProducts"></span> <span class="muted" data-i18n="optional"></span></label><div id="corpList"></div></div>
       <div id="inquiryError" class="error hidden" role="alert"></div>
       <div class="actions"><button class="btn" type="submit" data-i18n="sendRequest"></button></div>
@@ -260,7 +261,13 @@ async function init() {
     $('corpPartners').classList.remove('hidden');
   }).catch(() => {});
   $('eventType').innerHTML = CFG.inquiryTypes.map((x) => `<option value="${x.id}">${escH(x.name)}</option>`).join('');
-  const syncVendors = () => $('vendorBox').classList.toggle('hidden', !(CFG.inquiryTypes.find((x) => x.id === $('eventType').value) || {}).vendors);
+  const syncVendors = () => {
+    $('vendorBox').classList.toggle('hidden', !(CFG.inquiryTypes.find((x) => x.id === $('eventType').value) || {}).vendors);
+    const items = (CFG.eventItems || {})[$('eventType').value] || [];
+    $('eventItemsBox').classList.toggle('hidden', !items.length);
+    $('eventItemsList').innerHTML = items.map((x) => `<label class="check" style="margin:6px 0"><input type="checkbox" data-item="${escH(x)}"> ${escH(x)}</label>`).join('');
+  };
+  syncVendors();
   $('eventType').addEventListener('change', syncVendors);
 
   document.querySelectorAll('.tab').forEach((x) => x.onclick = () => {
@@ -524,7 +531,7 @@ async function submitInquiry(e) {
     await api('/api/leads', {
       eventType: $('eventType').value, name: $('iName').value, organization: $('iOrg').value, email: $('iEmail').value,
       phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value, endDate: $('iEnd').value, vendorCount: $('vendorBox').classList.contains('hidden') ? '' : $('iVendors').value,
-      message: [$('iMsg').value, ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`), LANG === 'es' ? '(Prefers Spanish)' : ''].filter(Boolean).join('\n'),
+      message: [$('iMsg').value, ...(document.querySelector('[data-item]:checked') ? ['Interested in: ' + [...document.querySelectorAll('[data-item]:checked')].map((c) => c.dataset.item).join(', ')] : []), ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`), LANG === 'es' ? '(Prefers Spanish)' : ''].filter(Boolean).join('\n'),
     });
     $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');
   } catch (err) { $('inquiryError').textContent = err.message; $('inquiryError').classList.remove('hidden'); }

@@ -45,7 +45,7 @@
       waitJoin: 'Join the waitlist', waitDone: "You're on the waitlist for {0}. We'll email you if a time opens.", waitSms: 'Text me too', waitAnyTime: 'Want a time that’s taken? Join the waitlist',
       tourBtn: '▶ Take the video tour', faqTitle: 'Questions parents ask', instaTitle: 'Follow us on Instagram', rendering: 'Rendering', priceUp: '+{0}', priceDown: '−{0}',
       inquiryTitle: 'Tell us about your event', inquiryIntro: "Corporate outings, adult nights, senior groups and team skill building. We'll get back to you with a quote.",
-      eventType: 'Type of event', orgTeam: 'Organization / team', prefDate: 'Preferred date', endDate: 'Last day (multi-day events)', vendorCount: 'Vendors / tables needed', groupSize: 'Group size', details: 'Details', partnerProducts: 'Add partner products to your quote',
+      eventType: 'Type of event', orgTeam: 'Organization / team', prefDate: 'Preferred date', addItems: 'Items you’d like us to quote', itemsNote: 'Food and drinks are arranged through our catering partners.', endDate: 'Last day (multi-day events)', vendorCount: 'Vendors / tables needed', groupSize: 'Group size', details: 'Details', partnerProducts: 'Add partner products to your quote',
       sendRequest: 'Send request', thanksGot: 'Thanks — we got it!', reachOut: "We'll reach out within one business day.", location: 'Location',
       courtsCaption: 'Courts & turf for team events', trainingCaption: 'Turf field for skill sessions',
       // party page
@@ -138,7 +138,7 @@
       waitJoin: 'Anotarme en la lista de espera', waitDone: 'Está en la lista de espera para el {0}. Le escribiremos si se abre un horario.', waitSms: 'Avísenme también por mensaje de texto', waitAnyTime: '¿Quiere un horario ocupado? Anótese en la lista de espera',
       tourBtn: '▶ Ver el recorrido en video', faqTitle: 'Preguntas frecuentes', instaTitle: 'Síganos en Instagram', rendering: 'Representación', priceUp: '+{0}', priceDown: '−{0}',
       inquiryTitle: 'Cuéntenos de su evento', inquiryIntro: 'Salidas de empresa, noches para adultos, grupos de personas mayores y entrenamiento de equipos. Le enviaremos una cotización.',
-      eventType: 'Tipo de evento', orgTeam: 'Organización / equipo', prefDate: 'Fecha preferida', endDate: 'Último día (eventos de varios días)', vendorCount: 'Vendedores / mesas necesarias', groupSize: 'Tamaño del grupo', details: 'Detalles', partnerProducts: 'Agregar productos de socios a su cotización',
+      eventType: 'Tipo de evento', orgTeam: 'Organización / equipo', prefDate: 'Fecha preferida', addItems: 'Artículos que desea cotizar', itemsNote: 'La comida y las bebidas se coordinan con nuestros socios de catering.', endDate: 'Último día (eventos de varios días)', vendorCount: 'Vendedores / mesas necesarias', groupSize: 'Tamaño del grupo', details: 'Detalles', partnerProducts: 'Agregar productos de socios a su cotización',
       sendRequest: 'Enviar solicitud', thanksGot: '¡Gracias, la recibimos!', reachOut: 'Le contestaremos en un día hábil.', location: 'Sede',
       courtsCaption: 'Canchas y césped para eventos de equipo', trainingCaption: 'Césped para sesiones de habilidades',
       loadingBooking: 'Cargando su reserva…', notFound: 'No encontramos la reserva', notFoundHint: 'Use el enlace de su correo de confirmación o comuníquese con nosotros.',
