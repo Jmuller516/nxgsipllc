@@ -108,7 +108,7 @@
     <div class="card">
       <div class="phases two">
         <figure><img src="/static/img/courts.jpg" alt="" loading="lazy"><figcaption data-i18n="courtsCaption"></figcaption></figure>
-        <figure><img src="/static/img/training.jpg" alt="" loading="lazy"><figcaption data-i18n="trainingCaption"></figcaption></figure>
+        <figure><img src="/static/img/field-2.jpg" alt="" loading="lazy"><figcaption data-i18n="trainingCaption"></figcaption></figure>
       </div>
       <h2 data-i18n="inquiryTitle"></h2>
       <p class="muted" data-i18n="inquiryIntro"></p>
@@ -288,7 +288,7 @@ async function init() {
 // Real photos, video tour, FAQ and Instagram (managed in Admin → Website).
 function showSite(here) {
   const real = !!SITE?.photos?.length;
-  const photos = real ? SITE.photos : ['exterior-front', 'exterior-aerial', 'exterior-entrance', 'exterior-closeup', 'exterior-lot', 'field', 'front-desk', 'courts', 'courts-wide', 'courts-2', 'gameroom', 'gameroom-2', 'lounge', 'lounge-2', 'cheer', 'training', 'training-2', 'yoga-room', 'pro-shop', 'bar-seating', 'concourse', 'office', 'restroom', 'field-2', 'lobby'].map((n) => `/static/img/${n}.jpg`);
+  const photos = real ? SITE.photos : ['exterior-front', 'exterior-aerial', 'exterior-entrance', 'exterior-closeup', 'exterior-lot', 'field', 'front-desk', 'courts', 'courts-wide', 'courts-2', 'gameroom', 'gameroom-2', 'lounge', 'lounge-2', 'cheer', 'bar-seating', 'concourse', 'field-2', 'lobby'].map((n) => `/static/img/${n}.jpg`);
   $('heroImg').alt = here.name;
   $('heroCap').textContent = real ? here.name : `${t('rendering')} · ${here.name}`;
   {

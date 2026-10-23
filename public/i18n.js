@@ -47,7 +47,7 @@
       inquiryTitle: 'Tell us about your event', inquiryIntro: "Corporate outings, adult nights, senior groups and team skill building. We'll get back to you with a quote.",
       eventType: 'Type of event', orgTeam: 'Organization / team', prefDate: 'Preferred date', groupSize: 'Group size', details: 'Details', partnerProducts: 'Add partner products to your quote',
       sendRequest: 'Send request', thanksGot: 'Thanks — we got it!', reachOut: "We'll reach out within one business day.", location: 'Location',
-      courtsCaption: 'Courts & turf for team events', trainingCaption: 'Training room for skill sessions',
+      courtsCaption: 'Courts & turf for team events', trainingCaption: 'Turf field for skill sessions',
       // party page
       loadingBooking: 'Loading your booking…', notFound: 'Booking not found', notFoundHint: 'Please use the link from your confirmation email, or contact us.',
       st_pending: 'Waiting for payment. Your time is held for a short while.', st_confirmed: 'Confirmed. Deposit received.', st_paid: 'Confirmed. Paid in full.', st_cancelled: 'Cancelled.', st_expired: 'This hold expired before payment. Please book again or contact us.',
@@ -139,7 +139,7 @@
       inquiryTitle: 'Cuéntenos de su evento', inquiryIntro: 'Salidas de empresa, noches para adultos, grupos de personas mayores y entrenamiento de equipos. Le enviaremos una cotización.',
       eventType: 'Tipo de evento', orgTeam: 'Organización / equipo', prefDate: 'Fecha preferida', groupSize: 'Tamaño del grupo', details: 'Detalles', partnerProducts: 'Agregar productos de socios a su cotización',
       sendRequest: 'Enviar solicitud', thanksGot: '¡Gracias, la recibimos!', reachOut: 'Le contestaremos en un día hábil.', location: 'Sede',
-      courtsCaption: 'Canchas y césped para eventos de equipo', trainingCaption: 'Sala de entrenamiento para sesiones de habilidades',
+      courtsCaption: 'Canchas y césped para eventos de equipo', trainingCaption: 'Césped para sesiones de habilidades',
       loadingBooking: 'Cargando su reserva…', notFound: 'No encontramos la reserva', notFoundHint: 'Use el enlace de su correo de confirmación o comuníquese con nosotros.',
       st_pending: 'Esperando el pago. Su horario queda reservado por un rato.', st_confirmed: 'Confirmada. Recibimos el depósito.', st_paid: 'Confirmada. Pagada por completo.', st_cancelled: 'Cancelada.', st_expired: 'La reserva temporal venció antes del pago. Reserve de nuevo o comuníquese con nosotros.',
       paymentReceived: 'Pago recibido. ¡Gracias!', bookingN: 'Reserva {0}', partyOf: 'Fiesta de {0}', yourParty: 'Su fiesta',
