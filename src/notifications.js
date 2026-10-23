@@ -411,8 +411,8 @@ function createNotifier(db, svc, opts = {}) {
       kind: 'staff_new_lead', leadId: lead.id, dedupeKey: `staff_new_lead:${lead.id}`,
       subject: `New lead: ${type} — ${lead.name}${lead.organization ? ` (${lead.organization})` : ''}`,
       html: wrap(`New lead: ${type}`, `<p><b>${esc(lead.name)}</b>${lead.organization ? ` · ${esc(lead.organization)}` : ''}<br>${esc(lead.email)}${lead.phone ? ` · ${esc(lead.phone)}` : ''}</p>
-        <p>Preferred date: ${esc(lead.preferred_date || '—')} · Group size: ${esc(lead.group_size || '—')}</p>${lead.message ? `<p>${esc(lead.message)}</p>` : ''}`, { label: 'Open leads', url: `${baseUrl()}/admin` }),
-      text: `New lead: ${type}\n${lead.name} ${lead.organization || ''}\n${lead.email} ${lead.phone || ''}\nDate: ${lead.preferred_date || '-'} · Size: ${lead.group_size || '-'}\n${lead.message || ''}`,
+        <p>Preferred date: ${esc(lead.preferred_date || '—')}${lead.end_date ? ` to ${esc(lead.end_date)}` : ''}${lead.vendor_count ? ` · Vendors/tables: ${esc(lead.vendor_count)}` : ''} · Group size: ${esc(lead.group_size || '—')}</p>${lead.message ? `<p>${esc(lead.message)}</p>` : ''}`, { label: 'Open leads', url: `${baseUrl()}/admin` }),
+      text: `New lead: ${type}\n${lead.name} ${lead.organization || ''}\n${lead.email} ${lead.phone || ''}\nDate: ${lead.preferred_date || '-'}${lead.end_date ? ' to ' + lead.end_date : ''}${lead.vendor_count ? ' · Vendors: ' + lead.vendor_count : ''} · Size: ${lead.group_size || '-'}\n${lead.message || ''}`,
     });
   }
 

@@ -352,6 +352,8 @@ function open(file = process.env.DB_FILE || path.join(__dirname, '..', 'data', '
   addColumn(db, 'bookings', 'referred_by', 'INTEGER');
   addColumn(db, 'emails', 'channel', "TEXT NOT NULL DEFAULT 'email'");
   addColumn(db, 'bookings', 'location_id', "TEXT NOT NULL DEFAULT 'farmingdale'");
+  addColumn(db, 'leads', 'vendor_count', 'INTEGER');
+  addColumn(db, 'leads', 'end_date', 'TEXT');
   addColumn(db, 'blocks', 'location_id', "TEXT NOT NULL DEFAULT 'farmingdale'");
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_invite ON bookings(invite_token)');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_referral ON bookings(referral_code)');

@@ -303,7 +303,14 @@ module.exports = {
   },
 
   inquiryTypes: [
-    { id: 'corporate', name: 'Corporate event' },
+    { id: 'corporate', name: 'Company outing / corporate event' },
+    { id: 'teambuilding', name: 'Team-building day' },
+    { id: 'expo', name: 'Sports expo / trade show', vendors: true },
+    { id: 'cardshow', name: 'Baseball card / collectibles show', vendors: true },
+    { id: 'market', name: 'Vendor market / pop-up', vendors: true },
+    { id: 'tournament', name: 'Tournament / league' },
+    { id: 'fundraiser', name: 'Fundraiser / charity event' },
+    { id: 'school', name: 'School, camp or youth group' },
     { id: 'adult', name: 'Adult event / league night' },
     { id: 'senior', name: 'Senior event' },
     { id: 'team', name: 'Team skill building' },

@@ -458,3 +458,19 @@ test('thank-you: no gift when the family already booked another party', async ()
     assert.equal(t.sentEmails.filter((m) => /gift for your next party/.test(m.subject)).length, 0);
   } finally { t.close(); }
 });
+
+test('expanded event types: card show lead stores vendors + end date; /events served', async (t) => {
+  const ctx = await start(); t.after(() => ctx.close());
+  const r = await ctx.call('POST', '/api/leads', { eventType: 'cardshow', name: 'Sam', email: 'sam@example.com', preferredDate: '2027-03-06', endDate: '2027-03-07', groupSize: 300, vendorCount: 40, message: 'Two-day card show' });
+  assert.equal(r.status, 200);
+  const leads = await ctx.call('GET', '/api/admin/leads', null, ctx.auth);
+  assert.equal(leads.json[0].vendor_count, 40);
+  assert.equal(leads.json[0].end_date, '2027-03-07');
+  const cfg = await ctx.call('GET', '/api/config');
+  for (const id of ['expo', 'cardshow', 'market', 'tournament', 'fundraiser', 'school', 'teambuilding']) assert.ok(cfg.json.inquiryTypes.some((x) => x.id === id), id);
+  const page = await ctx.call('GET', '/events');
+  assert.equal(page.status, 200);
+  assert.match(page.text, /collectibles shows/);
+  const bad = await ctx.call('POST', '/api/leads', { eventType: 'nope', name: 'x', email: 'x@y.com' });
+  assert.equal(bad.status, 400);
+});

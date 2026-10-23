@@ -125,6 +125,10 @@
         <div><label for="iDate" data-i18n="prefDate"></label><input id="iDate" type="date"></div>
         <div><label for="iSize" data-i18n="groupSize"></label><input id="iSize" type="number" min="1" inputmode="numeric"></div>
       </div>
+      <div class="row">
+        <div><label for="iEnd"><span data-i18n="endDate"></span> <span class="muted" data-i18n="optional"></span></label><input id="iEnd" type="date"></div>
+        <div id="vendorBox" class="hidden"><label for="iVendors" data-i18n="vendorCount"></label><input id="iVendors" type="number" min="1" inputmode="numeric"></div>
+      </div>
       <label for="iMsg" data-i18n="details"></label><textarea id="iMsg" rows="4"></textarea>
       <div id="corpPartners" class="hidden"><label><span data-i18n="partnerProducts"></span> <span class="muted" data-i18n="optional"></span></label><div id="corpList"></div></div>
       <div id="inquiryError" class="error hidden" role="alert"></div>
@@ -190,7 +194,7 @@ async function init() {
   showSite(here);
   if (CFG.brand.logoUrl) { $('logo').src = CFG.brand.logoUrl; $('logo').alt = CFG.business.name; $('logo').classList.remove('hidden'); }
   if (params.get('embed')) { document.body.classList.add('embedded'); $('calLink').href = '/calendar?embed=1'; }
-  if (params.get('tab') === 'inquiry') setTimeout(() => { document.querySelector('[data-tab=inquiry]').click(); if (params.get('type')) $('eventType').value = params.get('type'); });
+  if (params.get('tab') === 'inquiry') setTimeout(() => { document.querySelector('[data-tab=inquiry]').click(); if (params.get('type')) { $('eventType').value = params.get('type'); $('eventType').dispatchEvent(new Event('change')); } });
   if (!CFG.stripe) $('demoBanner').classList.remove('hidden');
   if (params.get('cancelled')) $('cancelBanner').classList.remove('hidden');
 
@@ -256,6 +260,8 @@ async function init() {
     $('corpPartners').classList.remove('hidden');
   }).catch(() => {});
   $('eventType').innerHTML = CFG.inquiryTypes.map((x) => `<option value="${x.id}">${escH(x.name)}</option>`).join('');
+  const syncVendors = () => $('vendorBox').classList.toggle('hidden', !(CFG.inquiryTypes.find((x) => x.id === $('eventType').value) || {}).vendors);
+  $('eventType').addEventListener('change', syncVendors);
 
   document.querySelectorAll('.tab').forEach((x) => x.onclick = () => {
     document.querySelectorAll('.tab').forEach((y) => y.setAttribute('aria-selected', y === x));
@@ -517,7 +523,7 @@ async function submitInquiry(e) {
   try {
     await api('/api/leads', {
       eventType: $('eventType').value, name: $('iName').value, organization: $('iOrg').value, email: $('iEmail').value,
-      phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value,
+      phone: $('iPhone').value, preferredDate: $('iDate').value, groupSize: $('iSize').value, endDate: $('iEnd').value, vendorCount: $('vendorBox').classList.contains('hidden') ? '' : $('iVendors').value,
       message: [$('iMsg').value, ...[...document.querySelectorAll('[data-corp]:checked')].map((c) => `Interested in partner product: ${c.dataset.corp}`), LANG === 'es' ? '(Prefers Spanish)' : ''].filter(Boolean).join('\n'),
     });
     $('inquiryForm').classList.add('hidden'); $('inquiryDone').classList.remove('hidden');

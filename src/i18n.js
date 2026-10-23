@@ -65,7 +65,7 @@ const ES = {
   },
   units: { each: 'c/u', dozen: 'docena', set: 'juego', party: 'fiesta', box: 'caja', setup: 'montaje', kit: 'kit', hour: 'hora' },
   themes: { soccer: 'Fútbol', baseball: 'Béisbol', softball: 'Softbol', basketball: 'Baloncesto', football: 'Fútbol americano', lacrosse: 'Lacrosse', cheer: 'Porristas', 'all-sports': 'Mezcla de deportes' },
-  inquiryTypes: { corporate: 'Evento corporativo', adult: 'Evento para adultos / noche de liga', senior: 'Evento para personas mayores', team: 'Entrenamiento de equipo', other: 'Otra cosa' },
+  inquiryTypes: { corporate: 'Salida de empresa / evento corporativo', teambuilding: 'Día de trabajo en equipo', expo: 'Expo deportiva / feria comercial', cardshow: 'Exhibición de tarjetas de béisbol / coleccionables', market: 'Mercado de vendedores / pop-up', tournament: 'Torneo / liga', fundraiser: 'Evento para recaudar fondos', school: 'Escuela, campamento o grupo juvenil', adult: 'Evento para adultos / noche de liga', senior: 'Evento para personas mayores', team: 'Entrenamiento de equipo', other: 'Otra cosa' },
   compareRows: { length: 'Duración de la fiesta', sports: 'Deportes en la cancha', gameRoom: 'Salón de videojuegos', pizza: 'Pizza y bebidas para los niños', host: 'Anfitrión dedicado', shirts: 'Camiseta estampada para cada niño', goodieBags: 'Bolsa de regalos para cada niño' },
   timePricing: { prime: 'Horario estelar (mediodía de fin de semana)', friday: 'Descuento de viernes por la tarde' },
   taxLabel: 'Impuesto de ventas de NY',

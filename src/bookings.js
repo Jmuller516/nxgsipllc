@@ -554,10 +554,11 @@ function createService(db, cfg = config, clock = () => new Date(), hooks = {}) {
     if (!clean(input.name) || !clean(input.email)) throw new BookingError('Please include your name and email.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new BookingError('Please enter a valid email.');
     if (!cfg.inquiryTypes.some((t) => t.id === input.eventType)) throw new BookingError('Please choose an event type.');
-    const info = db.prepare(`INSERT INTO leads (event_type, name, organization, email, phone, preferred_date, group_size, message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(input.eventType, clean(input.name), clean(input.organization),
+    const info = db.prepare(`INSERT INTO leads (event_type, name, organization, email, phone, preferred_date, group_size, message, vendor_count, end_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(input.eventType, clean(input.name), clean(input.organization),
       clean(input.email).toLowerCase(), clean(input.phone), clean(input.preferredDate),
-      input.groupSize ? Number(input.groupSize) : null, clean(input.message));
+      input.groupSize ? Number(input.groupSize) : null, clean(input.message),
+      input.vendorCount ? Math.round(Number(input.vendorCount)) || null : null, clean(input.endDate));
     const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(Number(info.lastInsertRowid));
     fire('onLead', lead);
     return lead;

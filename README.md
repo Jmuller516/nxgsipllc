@@ -38,7 +38,7 @@ Party and event booking for **Next Generation Sports Complex**: customers book a
 - Add extras: food (Calabria Pizza, Amia's Deli), plus all 20 favors and decorations from the NXGS Birthday Add-Ons guide. Each item has its minimum order and lead time, and items that can't be made in time for the chosen date are greyed out.
 - Pay a **25% non-refundable deposit** through Stripe. Parties booked within 7 days are paid in full.
 - Get a confirmation/receipt page that also has a **Pay balance** button. The balance is due 7 days before the party.
-- Corporate, adult, senior and team skill-building events use an inquiry form, and each inquiry becomes a lead.
+- **Events page** (`/events`): company outings, team-building, sports expos, baseball card shows, vendor markets, tournaments, fundraisers, school groups, adult and senior events. Each has a button into the inquiry form; shows ask for vendors/tables and an end date, and every inquiry becomes a lead.
 - Automatic emails: booking confirmation, payment receipts, balance reminder (3 days before it's due), past-due notice, and "see you tomorrow"
 
 **For staff** (`/admin`, password protected)

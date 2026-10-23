@@ -533,7 +533,7 @@ async function loadLeads() {
       <td><b>${esc(l.name)}</b>${l.organization ? ` · ${esc(l.organization)}` : ''}<br>
         <a href="mailto:${esc(l.email)}">${esc(l.email)}</a>${l.phone ? ` · <a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>` : ''}
         ${l.message ? `<br><span class="muted">${esc(l.message)}</span>` : ''}</td>
-      <td class="hide-sm">${esc(fmtDate(l.preferred_date)) || '—'}${l.group_size ? `<br>${l.group_size} people` : ''}</td>
+      <td class="hide-sm">${esc(fmtDate(l.preferred_date)) || '—'}${l.end_date ? ` → ${esc(fmtDate(l.end_date))}` : ''}${l.group_size ? `<br>${l.group_size} people` : ''}${l.vendor_count ? `<br>${l.vendor_count} vendors/tables` : ''}</td>
       <td><select data-lead="${l.id}" data-field="status">${['new', 'contacted', 'quoted', 'booked', 'lost'].map((s) => `<option ${s === l.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
       <td class="hide-sm"><input type="date" data-lead="${l.id}" data-field="followUpDate" value="${esc(l.follow_up_date || '')}"></td>
     </tr>`).join('') || '<tr><td colspan="6" class="muted">No leads yet.</td></tr>');

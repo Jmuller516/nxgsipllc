@@ -845,6 +845,7 @@ function createApp(db, opts = {}) {
       if (req.method === 'GET' && im) return sendPage(res, 'invite.html', { INVITE_TOKEN: im[1] });
       if (req.method === 'GET' && pathname === '/waiver') return sendFile(res, 'waiver.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/gift-cards') return sendFile(res, 'gift.html', { embeddable: true });
+      if (req.method === 'GET' && pathname === '/events') return sendFile(res, 'events.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/partners') return sendFile(res, 'partners.html', { embeddable: true });
       const sp = /^\/s\/(\d+)$/.exec(pathname);
       if (req.method === 'GET' && sp) {
