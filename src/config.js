@@ -350,8 +350,8 @@ module.exports = {
     maxCents: 100000,
   },
 
-  // Thank-you after the party with party credit toward the next one. $25 is a starting point: change it here.
-  rebook: { enabled: true, afterDays: 7, creditCents: 2500 },
+  // Thank-you after the party with party credit toward the next one. Change the amount here.
+  rebook: { enabled: true, afterDays: 7, creditCents: 5000 },
 
   reviews: {
     minChars: 100,               // a review must say at least this much (keeps out drive-by and fake reviews)

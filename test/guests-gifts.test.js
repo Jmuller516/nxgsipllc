@@ -441,7 +441,7 @@ test('thank-you: a week after the party, one email with a party-credit code that
     assert.equal(m.length, 1);
     const code = /NXGC-[A-Z0-9-]+/.exec(m[0].html)?.[0];
     assert.ok(code, 'email carries the credit code');
-    assert.match(m[0].html, /\$25\.00/);
+    assert.match(m[0].html, /\$50\.00/);
     assert.match(m[0].html, new RegExp(`/book\\?code=${code}`));
     const card = (await t.call('GET', '/api/admin/gift-cards', null, t.auth)).json;
     assert.ok(JSON.stringify(card).includes(code));
