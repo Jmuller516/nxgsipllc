@@ -101,7 +101,7 @@ function saveSetup(db, input, cfg = config) {
 // ======================= Website content =======================
 function content(db) {
   const c = readSetting(db, 'site_content', {});
-  return { photos: c.photos || [], tourVideo: c.tourVideo || '', instagram: { handle: c.instagram?.handle || '', posts: c.instagram?.posts || [] }, faq: c.faq || null, seo: { ...config.seo, ...(c.seo || {}) } };
+  return { goodToKnow: c.goodToKnow || '', photos: c.photos || [], tourVideo: c.tourVideo || '', instagram: { handle: c.instagram?.handle || '', posts: c.instagram?.posts || [] }, faq: c.faq || null, seo: { ...config.seo, ...(c.seo || {}) } };
 }
 
 function saveContent(db, input) {
@@ -123,6 +123,7 @@ function saveContent(db, input) {
     c.seo = { pageTitle: text(input.seo.pageTitle, 70), headline: text(input.seo.headline, 120), intro: text(input.seo.intro, 600),
       areas: String(input.seo.areas || '').split(/\s*,\s*/).map((x) => text(x, 40)).filter(Boolean).slice(0, 20) };
   }
+  if (input.goodToKnow !== undefined) c.goodToKnow = String(input.goodToKnow || '').replace(/\r/g, '').split('\n').map((l) => l.trim().slice(0, 240)).filter(Boolean).slice(0, 15).join('\n');
   if (input.photos) c.photos = input.photos.filter((p) => /^\/media\/[a-f0-9]+\.(jpg|png|webp)$/.test(p)).slice(0, 12);
   writeSetting(db, 'site_content', c);
   return content(db);

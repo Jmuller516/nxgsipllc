@@ -27,6 +27,7 @@ module.exports = {
 
   // Automatic emails. Sending turns on when RESEND_API_KEY is set (see README).
   emails: {
+    weekAheadDays: 7,            // "one week to go" email and text, with what's left to do
     from: 'NXGS Parties <parties@nxgs.net>', // the domain must be verified in Resend
     replyTo: 'joseph@nxgs.net',
     staffAlerts: ['joseph@nxgs.net'],        // who gets "new booking" / "new lead" alerts
@@ -348,6 +349,9 @@ module.exports = {
     minCents: 2500,
     maxCents: 100000,
   },
+
+  // Thank-you after the party with party credit toward the next one. $25 is a starting point: change it here.
+  rebook: { enabled: true, afterDays: 7, creditCents: 2500 },
 
   reviews: {
     minChars: 100,               // a review must say at least this much (keeps out drive-by and fake reviews)

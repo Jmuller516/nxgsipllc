@@ -31,6 +31,21 @@ const WORDS = {
     codeSubject: 'Your NXGS party page code',
     codeHeading: 'Your party page code',
     codeBody: (name) => `Hi ${name}, here is the code for your party page. Enter it with the email you booked with.`,
+    weekSubject: (who) => `One week to go: ${who}`,
+    weekHeading: 'One week to go!',
+    weekBody: (b, who) => `Hi ${b.parent_name}, ${who} is one week away. Here is what is left so everything is ready:`,
+    weekAllSet: 'Nothing left to do. We can’t wait to see you!',
+    weekBalance: (amt, d) => `Pay the ${amt} balance (due ${d})`,
+    weekDetails: (list) => `Finish your party details: ${list}`,
+    weekInvite: 'Send the invitation link to your guests',
+    weekWaivers: (n) => `${n} waiver(s) still unsigned`,
+    weekButton: 'Open my party page',
+    weekSms: (who, n, link) => `${who} is one week away! ${n ? `${n} thing(s) left to do` : 'You are all set'}: ${link}`,
+    rebookSubject: 'Thank you from NXGS, plus a gift for your next party',
+    rebookHeading: 'Thank you for celebrating with us!',
+    rebookBody: (b, amt) => `Hi ${b.parent_name}, it was a pleasure hosting ${b.child_name || 'your family'}. Here is ${amt} in party credit toward your next party or add-ons. Enter this code at checkout:`,
+    rebookButton: 'Book my next party',
+    rebookText: (amt, code) => `Thank you for celebrating with us! Here is ${amt} in party credit toward your next party: ${code}`,
     confirmedSubject: (b, d) => `Party confirmed — ${d} at ${b.timeLabel} (${b.ref})`,
     confirmedHeading: (b, who) => (b.status === 'paid' ? `You're booked! ${who} is paid in full` : `You're booked! Deposit received for ${who}`),
     hiThanks: (b, biz) => `Hi ${b.parent_name}, thanks for booking with ${biz}!`,
@@ -117,6 +132,21 @@ const WORDS = {
     codeSubject: 'Su código para la página de la fiesta',
     codeHeading: 'Su código de la página de la fiesta',
     codeBody: (name) => `Hola ${name}, aquí está el código de la página de su fiesta. Ingréselo con el correo que usó para reservar.`,
+    weekSubject: (who) => `Falta una semana: ${who}`,
+    weekHeading: '¡Falta una semana!',
+    weekBody: (b, who) => `Hola ${b.parent_name}, falta una semana para ${who}. Esto es lo que falta para que todo esté listo:`,
+    weekAllSet: 'No falta nada por hacer. ¡Los esperamos!',
+    weekBalance: (amt, d) => `Pague el saldo de ${amt} (vence el ${d})`,
+    weekDetails: (list) => `Termine los datos de la fiesta: ${list}`,
+    weekInvite: 'Envíe el enlace de invitación a sus invitados',
+    weekWaivers: (n) => `Faltan ${n} exención(es) por firmar`,
+    weekButton: 'Abrir la página de mi fiesta',
+    weekSms: (who, n, link) => `¡Falta una semana para ${who}! ${n ? `Falta hacer ${n} cosa(s)` : 'Todo está listo'}: ${link}`,
+    rebookSubject: 'Gracias de parte de NXGS, y un regalo para su próxima fiesta',
+    rebookHeading: '¡Gracias por celebrar con nosotros!',
+    rebookBody: (b, amt) => `Hola ${b.parent_name}, fue un placer recibir a ${b.child_name || 'su familia'}. Aquí tiene ${amt} de crédito para su próxima fiesta o extras. Ingrese este código al pagar:`,
+    rebookButton: 'Reservar mi próxima fiesta',
+    rebookText: (amt, code) => `¡Gracias por celebrar con nosotros! Aquí tiene ${amt} de crédito para su próxima fiesta: ${code}`,
     confirmedSubject: (b, d) => `Fiesta confirmada — ${d} a las ${b.timeLabel} (${b.ref})`,
     confirmedHeading: (b, who) => (b.status === 'paid' ? `¡Reserva lista! ${cap(who)} está pagada por completo` : `¡Reserva lista! Recibimos el depósito de ${who}`),
     hiThanks: (b, biz) => `Hola ${b.parent_name}, ¡gracias por reservar con ${biz}!`,
@@ -237,6 +267,7 @@ function toE164(phone) {
 function createNotifier(db, svc, opts = {}) {
   const cfg = opts.config || config;
   const clock = opts.clock || (() => new Date());
+  const issueCredit = opts.issueCredit || null;
   const baseUrl = () => (opts.baseUrl || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
   const sender = opts.sender || (process.env.RESEND_API_KEY ? resendSend : null);
   const smsSender = opts.smsSender || (twilioReady() ? twilioSend : null);
@@ -561,6 +592,23 @@ function createNotifier(db, svc, opts = {}) {
           text: `${w.detailsBody(b, who(b), date(b.party_date, L))} ${st.missing.map((m) => i18n.missingText(m, L)).join(', ')}.\n${customerLink(b)}#details`,
         }) ? 1 : 0;
       }
+      // One week to go: what's left, by email and text. Skipped for parties booked inside that week.
+      const weekFrom = addDays(b.party_date, -(cfg.emails.weekAheadDays || 7));
+      if (today >= weekFrom && today <= addDays(b.party_date, -2) && String(b.created_at).slice(0, 10) < weekFrom) {
+        const g7 = guests ? guests.partyGuests(b.id) : null;
+        const todo = [];
+        if (b.status === 'confirmed' && b.balanceCents > 0) todo.push(w.weekBalance(money(b.balanceCents), date(b.balance_due_date, L)));
+        if (!st.complete) todo.push(w.weekDetails(st.missing.map((m) => i18n.missingText(m, L)).join(', ')));
+        if (g7 && g7.yes + g7.no === 0) todo.push(w.weekInvite);
+        if (g7 && g7.missingWaivers.length) todo.push(w.weekWaivers(g7.missingWaivers.length));
+        n += queue({
+          kind: 'week_ahead', to: b.email, bookingId: b.id, dedupeKey: `week_ahead:${b.id}`,
+          subject: w.weekSubject(who(b)),
+          html: wrap(w.weekHeading, `<p>${esc(w.weekBody(b, who(b)))}</p>${partyFacts(b)}${todo.length ? `<ul style="padding-left:20px">${todo.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : `<p>${esc(w.weekAllSet)}</p>`}`, { label: w.weekButton, url: customerLink(b) }, { lang: L }),
+          text: `${w.weekBody(b, who(b))}\n\n${textFacts(b)}\n\n${todo.length ? todo.map((x) => `- ${x}`).join('\n') : w.weekAllSet}\n\n${customerLink(b)}`,
+        }) ? 1 : 0;
+        queueSms({ kind: 'sms_week_ahead', booking: b, dedupeKey: `week_ahead:${b.id}`, body: w.weekSms(who(b), todo.length, customerLink(b)) });
+      }
       // Party tomorrow.
       if (addDays(today, 1) === b.party_date) {
         const g = guests ? guests.partyGuests(b.id) : null;
@@ -590,6 +638,26 @@ function createNotifier(db, svc, opts = {}) {
         html: wrap(w.reviewHeading, `<p>${esc(w.reviewBody(b))}</p>`, { label: w.reviewButton, url: `${customerLink(b)}#review` }, { lang: b.lang }),
         text: `${w.reviewBody(b)} ${customerLink(b)}#review`,
       }) ? 1 : 0;
+    }
+
+    // Thank-you with party credit for the next party, a week after.
+    if (cfg.rebook && cfg.rebook.enabled && issueCredit) {
+      const day = addDays(today, -cfg.rebook.afterDays);
+      for (const b of svc.list({ from: day, to: day }).filter((x) => ['confirmed', 'paid'].includes(x.status))) {
+        const key = `rebook:${b.id}`;
+        if (db.prepare('SELECT 1 FROM emails WHERE dedupe_key = ?').get(key)) continue;
+        // Already booked again? Then no gift is needed.
+        if (db.prepare(`SELECT 1 FROM bookings WHERE lower(email) = lower(?) AND status IN ('confirmed','paid') AND party_date > ?`).get(b.email, today)) continue;
+        const w = W(b.lang), L = b.lang === 'es' ? 'es' : 'en';
+        const card = issueCredit({ amount: cfg.rebook.creditCents / 100, recipientName: b.parent_name, recipientEmail: b.email, message: `Thank-you credit for ${b.ref}`, sendEmail: false });
+        const amt = money(card.initial_cents);
+        n += queue({
+          kind: 'rebook_offer', to: b.email, bookingId: b.id, dedupeKey: key,
+          subject: w.rebookSubject,
+          html: wrap(w.rebookHeading, `<p>${esc(w.rebookBody(b, amt))}</p><p style="font-family:monospace;font-size:18px;letter-spacing:.06em;text-align:center;background:#f4f6f9;padding:12px;border-radius:8px">${esc(card.code)}</p>`, { label: w.rebookButton, url: bookLink({ code: card.code, lang: L === 'es' ? 'es' : '' }) }, { lang: L }),
+          text: `${w.rebookText(amt, card.code)}\n${bookLink({ code: card.code })}`,
+        }) ? 1 : 0;
+      }
     }
 
     n += queueRecovery(today);

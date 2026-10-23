@@ -72,6 +72,21 @@ function todoCard() {
   </div>`;
 }
 
+// Where to go, when to arrive, and an easy way to put the party on a phone calendar.
+function beforeCard() {
+  const tips = [t('beforeArrive', B.timeLabel), t('beforePass'), t('beforeWaivers'), ...(B.goodToKnow || [])];
+  return `<div class="card" id="before">
+    <h2 style="margin-top:0">${t('beforeTitle')}</h2>
+    <p style="margin:0"><b>${esc(B.location.name)}</b><br><span class="muted">${esc(B.location.address)}</span></p>
+    <ul class="incl" style="margin-top:10px">${tips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    <div class="actions" style="margin-top:12px">
+      <a class="btn small" href="${esc(B.mapUrl)}" target="_blank" rel="noopener">${t('directions')}</a>
+      ${B.calendar ? `<a class="btn ghost small" href="${esc(B.calendar.googleUrl)}" target="_blank" rel="noopener">${t('calGoogle')}</a>
+      <a class="btn ghost small" href="${esc(B.calendar.icsUrl)}">${t('calApple')}</a>` : ''}
+    </div>
+  </div>`;
+}
+
 // Everything included with the package and each add-on they picked.
 function getCard() {
   const pkg = CFG.packages.find((p) => p.id === B.packageId);
@@ -115,6 +130,7 @@ function render() {
 
     ${active ? todoCard() : ''}
     ${active ? getCard() : ''}
+    ${active ? beforeCard() : ''}
 
     ${B.videoUrl ? `<div class="card"><h2 style="margin-top:0">🎬 ${t('videoTitle')}</h2><a class="btn" href="${esc(B.videoUrl)}" target="_blank" rel="noopener">${t('watchVideo')}</a></div>` : ''}
 

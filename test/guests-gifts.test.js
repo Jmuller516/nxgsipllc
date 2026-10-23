@@ -41,7 +41,7 @@ async function start(at = '2026-11-01T15:00:00Z') {
     const back = new URL(p.headers.get('location'));
     return { ref: r.json.ref, t: back.searchParams.get('t') };
   };
-  return { app, db, call, auth, bookAndPay, sentEmails, sentTexts, setNow: (iso) => { now = new Date(iso); }, close: () => server.close() };
+  return { base, app, db, call, auth, bookAndPay, sentEmails, sentTexts, setNow: (iso) => { now = new Date(iso); }, close: () => server.close() };
 }
 
 test('waivers: validation, one per child per guardian, valid for a year, editable text', async () => {
@@ -384,5 +384,77 @@ test('parent portal: "email me my code" re-sends it and does not reveal who has 
     await t.call('POST', '/api/portal/resend', { email: 'dana@example.com' });
     await t.app.notifier.flush();
     assert.equal(t.sentEmails.filter((m) => /party page code/i.test(m.subject)).length, 1);
+  } finally { t.close(); }
+});
+
+test('party page: calendar file, directions and the "before you come" tips', async () => {
+  const t = await start();
+  try {
+    const b = await t.bookAndPay(party);
+    await t.call('PUT', '/api/admin/site', { goodToKnow: 'Parking is free behind the building.\n\nWear sneakers.' }, t.auth);
+    const v = (await t.call('GET', `/api/bookings/${b.ref}?t=${b.t}`)).json;
+    assert.deepEqual(v.goodToKnow, ['Parking is free behind the building.', 'Wear sneakers.']);
+    assert.match(v.mapUrl, /google\.com\/maps/);
+    assert.match(v.calendar.googleUrl, /calendar\.google\.com.*dates=20261128T120000/);
+    const ics = await fetch(`${t.base}${v.calendar.icsUrl}`);
+    assert.equal(ics.status, 200);
+    assert.match(ics.headers.get('content-type'), /text\/calendar/);
+    const body = await ics.text();
+    assert.match(body, /DTSTART;TZID=America\/New_York:20261128T120000/);
+    assert.match(body, /SUMMARY:Liam's party/);
+    assert.equal((await fetch(`${t.base}/booking/${b.ref}/calendar.ics?t=nope`)).status, 404);
+  } finally { t.close(); }
+});
+
+test('reminders: "one week to go" lists what is left, once, and skips parties booked inside that week', async () => {
+  const t = await start();
+  try {
+    const first = await t.bookAndPay(party);   // 2026-11-28, booked 2026-11-01
+    t.db.prepare("UPDATE bookings SET created_at = '2026-11-01 10:00:00' WHERE ref = ?").run(first.ref);
+    t.setNow('2026-11-20T15:00:00Z');
+    await t.app.notifier.tick();
+    assert.equal(t.sentEmails.filter((m) => /One week to go/.test(m.subject)).length, 0, 'too early');
+    t.setNow('2026-11-21T15:00:00Z');
+    await t.app.notifier.tick(); await t.app.notifier.tick();
+    const w = t.sentEmails.filter((m) => /One week to go/.test(m.subject));
+    assert.equal(w.length, 1);
+    assert.match(w[0].html, /Pay the \$/);
+    assert.match(w[0].html, /Send the invitation link/);
+
+    const late = await t.bookAndPay({ ...party, time: '16:00', email: 'late@example.com' });   // booked 7 days out, same Saturday
+    t.db.prepare("UPDATE bookings SET created_at = '2026-11-21 10:00:00' WHERE ref = ?").run(late.ref);   // the test clock does not drive created_at
+    await t.app.notifier.tick();
+    assert.equal(t.sentEmails.filter((m) => /One week to go/.test(m.subject) && m.to === 'late@example.com').length, 0);
+  } finally { t.close(); }
+});
+
+test('thank-you: a week after the party, one email with a party-credit code that works at checkout', async () => {
+  const t = await start();
+  try {
+    await t.bookAndPay(party);
+    t.setNow('2026-12-04T15:00:00Z');
+    await t.app.notifier.tick();
+    assert.equal(t.sentEmails.filter((m) => /gift for your next party/.test(m.subject)).length, 0, 'day 6');
+    t.setNow('2026-12-05T15:00:00Z');
+    await t.app.notifier.tick(); await t.app.notifier.tick();
+    const m = t.sentEmails.filter((x) => /gift for your next party/.test(x.subject));
+    assert.equal(m.length, 1);
+    const code = /NXGC-[A-Z0-9-]+/.exec(m[0].html)?.[0];
+    assert.ok(code, 'email carries the credit code');
+    assert.match(m[0].html, /\$25\.00/);
+    assert.match(m[0].html, new RegExp(`/book\\?code=${code}`));
+    const card = (await t.call('GET', '/api/admin/gift-cards', null, t.auth)).json;
+    assert.ok(JSON.stringify(card).includes(code));
+  } finally { t.close(); }
+});
+
+test('thank-you: no gift when the family already booked another party', async () => {
+  const t = await start();
+  try {
+    await t.bookAndPay(party);
+    await t.bookAndPay({ ...party, partyDate: '2027-01-16', time: '16:00' });   // same parent, next party
+    t.setNow('2026-12-05T15:00:00Z');
+    await t.app.notifier.tick();
+    assert.equal(t.sentEmails.filter((m) => /gift for your next party/.test(m.subject)).length, 0);
   } finally { t.close(); }
 });

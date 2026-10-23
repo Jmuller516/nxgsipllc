@@ -295,6 +295,9 @@
     <div class="card"><h2 style="margin-top:0">Photos</h2><p class="muted">Real photos replace the renderings on the booking page and the search page. The first photo is the big one.</p>
       <div class="photo-grid" id="wsPhotos"></div>
       <label class="btn ghost small" style="display:inline-block;margin-top:10px">Add photo<input type="file" id="wsPhotoIn" accept="image/jpeg,image/png,image/webp" hidden></label></div>
+    <div class="card"><h2 style="margin-top:0">Before you come</h2><p class="muted">Shown on every family's party page, one tip per line. Good things to cover: parking, what to bring (socks, water bottle), outside food and cake rules, where to enter.</p>
+      <label for="wsGood">Tips (one per line)</label><textarea id="wsGood" rows="6" placeholder="Parking is free in the lot behind the building.&#10;Wear sneakers or turf shoes."></textarea>
+      <div class="actions"><button class="btn" id="wsGoodSave">Save tips</button><span class="muted" id="wsGoodMsg"></span></div></div>
     <div class="card"><h2 style="margin-top:0">Video tour</h2><label for="wsVideo">YouTube or Vimeo link, or a link to an .mp4</label><input id="wsVideo" placeholder="https://youtu.be/…">
       <div class="actions"><button class="btn" id="wsVideoSave">Save video</button><span class="muted" id="wsVideoMsg"></span></div></div>
     <div class="card"><h2 style="margin-top:0">Questions parents ask</h2><p class="muted">Shown on the booking page and search page, and the chat assistant uses them. Questions without an answer stay hidden. Answers marked “automatic” are written from your prices and policies.</p>
@@ -728,7 +731,7 @@ async function loadWebsite(data) {
   SITE = data || await api('/api/admin/site');
   $('wsPhotos').innerHTML = SITE.photos.map((p, i) => `<figure><img src="${esc(p)}" alt=""><button class="btn ghost small" data-rmphoto="${i}">✕</button></figure>`).join('') || '<p class="muted">No photos yet. The renderings show until you add some.</p>';
   $('wsPhotos').querySelectorAll('[data-rmphoto]').forEach((b) => b.onclick = async () => loadWebsite(await api('/api/admin/site', 'PUT', { photos: SITE.photos.filter((_, i) => i !== Number(b.dataset.rmphoto)) })));
-  $('wsVideo').value = SITE.tourVideo || '';
+  $('wsVideo').value = SITE.tourVideo || ''; $('wsGood').value = SITE.goodToKnow || '';
   $('wsIgHandle').value = SITE.instagram.handle; $('wsIgPosts').value = SITE.instagram.posts.join('\n');
   $('wsTitle').value = SITE.seo.pageTitle; $('wsHead').value = SITE.seo.headline; $('wsIntro').value = SITE.seo.intro; $('wsAreas').value = SITE.seo.areas.join(', ');
   renderFaq(SITE.faq);
@@ -744,6 +747,7 @@ function renderFaq(list) {
 const faqFromForm = () => [...document.querySelectorAll('[data-faq]')].map((el) => Object.fromEntries([['auto', el.dataset.auto || undefined], ...[...el.querySelectorAll('[data-k]')].map((i) => [i.dataset.k, i.value])]));
 $('wsFaqAdd').onclick = () => { const list = faqFromForm().map((f) => ({ en: { q: f.q, a: f.a }, es: { q: f.qEs || '', a: f.aEs || '' }, auto: f.auto, a: '' })); list.push({ en: { q: '', a: '' }, es: { q: '', a: '' }, draft: true }); renderFaq(list); };
 $('wsFaqSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { faq: faqFromForm() })); $('wsFaqMsg').textContent = 'Saved ✓'; } catch (e) { $('wsFaqMsg').textContent = e.message; } };
+$('wsGoodSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { goodToKnow: $('wsGood').value })); $('wsGoodMsg').textContent = 'Saved ✓'; } catch (e) { $('wsGoodMsg').textContent = e.message; } };
 $('wsVideoSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { tourVideo: $('wsVideo').value })); $('wsVideoMsg').textContent = 'Saved ✓'; } catch (e) { $('wsVideoMsg').textContent = e.message; } };
 $('wsIgSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { instagram: { handle: $('wsIgHandle').value, posts: $('wsIgPosts').value } })); $('wsIgMsg').textContent = 'Saved ✓'; } catch (e) { $('wsIgMsg').textContent = e.message; } };
 $('wsSeoSave').onclick = async () => { try { await loadWebsite(await api('/api/admin/site', 'PUT', { seo: { pageTitle: $('wsTitle').value, headline: $('wsHead').value, intro: $('wsIntro').value, areas: $('wsAreas').value } })); $('wsSeoMsg').textContent = 'Saved ✓'; } catch (e) { $('wsSeoMsg').textContent = e.message; } };

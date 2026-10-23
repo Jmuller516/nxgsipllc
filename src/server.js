@@ -35,7 +35,7 @@ function createApp(db, opts = {}) {
   const audience = createAudience(db, { clock: opts.clock });
   const guests = createGuests(db, svc, { clock: opts.clock, audience });
   const sponsors = createSponsors(db, { clock: opts.clock });
-  const notifier = createNotifier(db, svc, { clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests, sponsors, audience });
+  const notifier = createNotifier(db, svc, { issueCredit: (a) => gifts.createManual(a), clock: opts.clock, sender: opts.emailSender, smsSender: opts.smsSender, baseUrl: opts.baseUrl, guests, sponsors, audience });
   const waitlist = createWaitlist(db, svc, { clock: opts.clock, hooks: { onWaitlistOpen: [notifier.onWaitlistOpen] } });
   const checkin = createCheckin(db, svc, guests, { clock: opts.clock });
   const insights = createInsights(db, svc);
@@ -536,6 +536,7 @@ function createApp(db, opts = {}) {
       { key: 'quickbooks', label: 'QuickBooks', ok: qbo.connected(), note: 'Connect from Settings.' },
       { key: 'photos', label: 'Real photos of the facility', ok: c.photos.length > 0, note: 'Upload photos on the Website tab (renderings show until then).' },
       { key: 'faq', label: 'FAQ answers', ok: drafts === 0, note: drafts ? `${drafts} question${drafts > 1 ? 's need' : ' needs'} your answer on the Website tab.` : '' },
+      { key: 'goodToKnow', label: '"Before you come" tips', ok: !!c.goodToKnow, note: 'On the Website tab, add parking, what to bring and food rules for the party page.' },
       { key: 'reviews', label: 'Google review link', ok: !!config.reviews.googleReviewUrl, note: 'Add your Google "write a review" link in src/config.js (reviews.googleReviewUrl).' },
     ];
   }
@@ -592,6 +593,24 @@ function createApp(db, opts = {}) {
     return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || null;
   }
 
+  /** "Add to calendar" for the family's own party: a .ics file for Apple/Outlook and a Google Calendar link. */
+  const icsLocal = (date, min) => `${date.replace(/-/g, '')}T${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}00`;
+  const icsText = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const partyTitle = (b) => `${b.child_name ? `${b.child_name}'s party` : 'Birthday party'} at ${config.business.shortName || config.business.name}`;
+  const partyNotes = (b) => `Booking ${b.ref}. Please arrive 10-15 minutes early.\nYour party page: ${(process.env.BASE_URL || opts.baseUrl || '').replace(/\/$/, '')}/booking/${b.ref}?t=${b.token}`;
+  function calendarLinks(b) {
+    const g = new URLSearchParams({ action: 'TEMPLATE', text: partyTitle(b), dates: `${icsLocal(b.party_date, b.start_min)}/${icsLocal(b.party_date, b.endMin)}`, ctz: config.business.timezone, location: `${b.location.name}, ${b.location.address}`, details: partyNotes(b) });
+    return { icsUrl: `/booking/${b.ref}/calendar.ics?t=${b.token}`, googleUrl: `https://calendar.google.com/calendar/render?${g}` };
+  }
+  function bookingIcs(b) {
+    const tz = config.business.timezone;
+    const stamp = (opts.clock || (() => new Date()))().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NXGS//Party App//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+      `UID:${b.ref}-family@nxgs-party-app`, `DTSTAMP:${stamp}`, `DTSTART;TZID=${tz}:${icsLocal(b.party_date, b.start_min)}`, `DTEND;TZID=${tz}:${icsLocal(b.party_date, b.endMin)}`,
+      `SUMMARY:${icsText(partyTitle(b))}`, `LOCATION:${icsText(`${b.location.name}, ${b.location.address}`)}`, `DESCRIPTION:${icsText(partyNotes(b))}`,
+      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Your party is tomorrow', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n') + '\r\n';
+  }
+
   /** What the customer's own booking page shows. */
   function customerView(b, lang) {
     const L = i18n.lang(lang || b.lang);
@@ -617,6 +636,9 @@ function createApp(db, opts = {}) {
       inviteToken: ['confirmed', 'paid'].includes(b.status) ? b.invite_token : null,
       referralCode: ['confirmed', 'paid'].includes(b.status) ? b.referral_code : null,
       accessCode: ['confirmed', 'paid'].includes(b.status) ? b.access_code : null,
+      goodToKnow: active ? String(site.content(db).goodToKnow || '').split('\n').filter(Boolean) : [],
+      mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${b.location.name}, ${b.location.address}`)}`,
+      calendar: active ? calendarLinks(b) : null,
       guests: g,
       canReview: reviews.canReview(b), review: review ? { rating: review.rating, comment: review.comment } : null,
       stripe: stripe.enabled(),
@@ -800,6 +822,13 @@ function createApp(db, opts = {}) {
       if (req.method === 'GET' && (pathname === '/my-party' || pathname === '/portal')) return sendFile(res, 'portal.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/calendar') return sendFile(res, 'calendar.html', { embeddable: true });
       if (req.method === 'GET' && pathname === '/chat') return sendFile(res, 'chat.html', { embeddable: true });
+      const fam = /^\/booking\/([A-Z0-9-]+)\/calendar\.ics$/.exec(pathname);
+      if (req.method === 'GET' && fam) {
+        const b = svc.get(authorizedBooking(fam[1], url.searchParams.get('t')).id);
+        if (!['confirmed', 'paid'].includes(b.status)) return send(res, { error: 'Not found' }, 404);
+        res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': `attachment; filename="party-${b.ref}.ics"`, 'Cache-Control': 'no-store' });
+        return res.end(bookingIcs(b));
+      }
       const feed = /^\/feeds\/([^/]+)\/parties\.ics$/.exec(pathname);
       if (req.method === 'GET' && feed) {
         if (!process.env.ADMIN_PASSWORD || !safeEqual(feed[1], feedToken())) return send(res, { error: 'Not found' }, 404);
